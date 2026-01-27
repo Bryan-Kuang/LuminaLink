@@ -1,103 +1,78 @@
-# 接口规范（一期）
+# Interfaces (Phase 1)
 
-本规范定义一期工程对外/对内的关键数据接口，便于后续替换模块与接入二期 TTS。
+This specification defines key data interfaces for external/internal communication in Phase 1, facilitating future module replacement and Phase 2 TTS integration.
 
-## 1. 视觉输入接口
+## 1. Visual Input Interface
 
-### 1.1 文件输入
+### 1.1 File Input
+- Input: Local path or URI
+- Supported Formats: MP4, AVI (Priority)
 
-- 输入：本地路径或 URI
-- 支持格式：MP4、AVI（优先）
+### 1.2 Streaming Input (Reserved)
+- `InputAdapter` should support input from external devices/network streams, uniformly producing frames and audio chunks.
 
-### 1.2 流式输入（预留）
-
-- `InputAdapter` 应支持从外部设备/网络流接入，统一产出帧与音频 chunk。
-
-## 2. 核心数据结构（概念）
+## 2. Core Data Structures (Conceptual)
 
 ### 2.1 VideoFrame
-
-- `pts_ms`：int，帧时间戳（毫秒）
-- `image`：RGB/BGR 图像矩阵（内部传递）
-- `frame_index`：int，可选
+- `pts_ms`: int, Frame timestamp (milliseconds)
+- `image`: RGB/BGR Image Matrix (Internal passing)
+- `frame_index`: int, Optional
 
 ### 2.2 AudioChunk
-
-- `start_ms`/`end_ms`：int，音频时间范围（毫秒）
-- `pcm_s16le`：bytes/ndarray，单声道 PCM（内部传递）
-- `sample_rate_hz`：int
+- `start_ms`/`end_ms`: int, Audio time range (milliseconds)
+- `pcm_s16le`: bytes/ndarray, Mono PCM (Internal passing)
+- `sample_rate_hz`: int
 
 ### 2.3 VisualFacts
-
-- `pts_ms`：int
-- `objects[]`：
-  - `label`：string
-  - `confidence`：float
-  - `bbox`：`[x1,y1,x2,y2]`（像素坐标）
-- `characters[]`：
-  - `character_id`：string
-  - `display_name`：string
-  - `confidence`：float
-  - `bbox`：可选（人脸框）
-- `scene_change`：bool
+- `pts_ms`: int
+- `objects[]`:
+  - `label`: string
+  - `confidence`: float
+  - `bbox`: `[x1,y1,x2,y2]` (Pixel coordinates)
+- `characters[]`:
+  - `character_id`: string
+  - `display_name`: string
+  - `confidence`: float
+  - `bbox`: Optional (Face box)
+- `scene_change`: bool
 
 ### 2.4 DialogueState
+- `is_dialogue`: bool
+- `confidence`: float
+- `active_segment_start_ms`: int, Optional
 
-- `is_dialogue`：bool
-- `confidence`：float
-- `active_segment_start_ms`：int，可选
+## 3. Narration Output Interface (Standardized)
 
-## 3. 解说输出接口（标准化）
+Phase 1 suggests implementing **JSON Lines** (One JSON object per line) for easy consumption by Players/TTS/Logging systems.
 
-一期建议实现 **JSON Lines**（每行一个 JSON 对象），便于被播放器/TTS/日志系统消费。
+### 3.1 NarrationSegment (JSONL)
+Fields:
+- `type`: Fixed as `"narration"`
+- `run_id`: string
+- `timestamp_start_ms`: int
+- `timestamp_end_ms`: int
+- `text`: string
+- `style`: string (e.g., `concise`/`detailed`/`cinematic`)
+- `detail_level`: int (e.g., 1-5)
+- `confidence`: float
+- `metadata`: object (Optional, containing object lists, character lists, scene IDs, etc.)
 
-### 3.1 NarrationSegment（JSONL）
-
-字段：
-
-- `type`：固定为 `"narration"`
-- `run_id`：string
-- `timestamp_start_ms`：int
-- `timestamp_end_ms`：int
-- `text`：string
-- `style`：string（例如：`concise`/`detailed`/`cinematic`）
-- `detail_level`：int（例如：1-5）
-- `confidence`：float
-- `metadata`：object（可选，包含对象列表、角色列表、场景ID等）
-
-示例：
-
+Example:
 ```json
-{
-  "type": "narration",
-  "run_id": "run_001",
-  "timestamp_start_ms": 12340,
-  "timestamp_end_ms": 12900,
-  "text": "乔快步走进昏暗的走廊，手里紧握着钥匙。",
-  "style": "concise",
-  "detail_level": 2,
-  "confidence": 0.82,
-  "metadata": {
-    "characters": [{ "id": "ch_joe", "name": "乔" }],
-    "objects": [{ "label": "key", "conf": 0.74 }]
-  }
-}
+{"type":"narration","run_id":"run_001","timestamp_start_ms":12340,"timestamp_end_ms":12900,"text":"Joe walks quickly into the dim corridor, clutching a key tightly.","style":"concise","detail_level":2,"confidence":0.82,"metadata":{"characters":[{"id":"ch_joe","name":"Joe"}],"objects":[{"label":"key","conf":0.74}]}}
 ```
 
-### 3.2 事件输出（可选）
+### 3.2 Event Output (Optional)
+Besides narration, optional outputs for debugging/visualization:
+- `scene_change`: Shot cut events
+- `dialogue_segment`: Dialogue intervals
+- `metrics`: Real-time throughput/latency
 
-除解说外，可选输出用于调试/可视化的事件：
+## 4. Configuration Interface
 
-- `scene_change`：镜头切换事件
-- `dialogue_segment`：对话区间
-- `metrics`：实时吞吐/延迟
+Suggestion: `config.yaml` + CLI overrides.
 
-## 4. 配置接口
-
-建议：`config.yaml` + CLI 覆盖。
-
-### 4.1 关键配置项（示例）
-
+### 4.1 Key Configuration Items (Examples)
 - `performance.max_end_to_end_latency_ms`
 - `performance.target_fps`
 - `vision.scene_change.threshold`
@@ -106,4 +81,5 @@
 - `audio.dialogue.vad_mode`
 - `nlg.style`
 - `nlg.detail_level`
-- `output.format`（`jsonl`/`callback`）
+- `output.format` (`jsonl`/`callback`)
+

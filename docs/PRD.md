@@ -1,142 +1,118 @@
-# 盲人电影解说系统（一期：视觉转文字）PRD
+# Blind-Friendly Movie Narration System (Phase 1: Vision-to-Text) PRD
 
-## 1. 背景与目标
+## 1. Background & Goal
+To provide "dialogue-gap" visual narration for visually impaired users. The system analyzes video input in real-time, detects scene changes, identifies key visual elements and characters, and generates natural language descriptions aligned with timestamps when no dialogue is present. Phase 2 will extend this to Text-to-Speech (TTS) output.
 
-为视障用户在观影时提供“对话间隙”的画面解说。系统对输入视频进行实时分析，检测场景变化、识别关键视觉要素与角色身份，并在无人物对话时生成与画面时间对齐的自然语言描述；在对话期间自动暂停解说。二期将扩展文字转音频（TTS）输出。
+## 2. Scope
+### Phase 1 (Covered by this PRD)
+- Vision-to-Text: Scene change detection, object/action extraction, character recognition, dialogue detection, narration generation, time synchronization, output interface.
 
-## 2. 范围
+### Phase 2 (Reserved)
+- Text-to-Speech (TTS): Speech synthesis, audio mixing, and playback/export.
 
-### 一期（本PRD覆盖）
+## 3. Users & Scenarios
+### 3.1 Primary Users
+- Visually Impaired Users (End users)
+- Content Creators/Tuners (Configuring narration detail and style)
+- System Integrators (Feeding video streams from external devices/players)
 
-- 视觉转文字：场景变化检测、目标/动作要素提取、角色识别、对话检测、解说生成、时间同步、输出接口。
+### 3.2 Typical Workflow
+1) User provides a local video file (MP4/AVI, etc.) or external device stream.
+2) System decodes frames and audio, establishing a time base.
+3) Performs scene change detection, visual element recognition, and character recognition.
+4) Dialogue detection determines if narration should be paused.
+5) Generates narration text segments (with timestamps) within allowed time windows.
+6) Outputs structured data to downstream (TTS/Player/Logs).
 
-### 二期（预留）
+## 4. Functional Requirements
+### 4.1 Visual Input
+- Support standard video files: MP4, AVI (Priority), and future extensions (MKV, etc.).
+- Universal Input Interface: Support file input and external device/network stream input (Phase 1 implements file input; stream interface reserved).
 
-- 文字转音频（TTS）：语音合成、音频混音与播放/导出。
+### 4.2 Scene Change Detection
+- Real-time video stream analysis to detect shot cuts/scene changes.
+- Output: `SceneSegment` (start/end timestamp) or `SceneChangeEvent` (timestamp).
+- Metrics: Recall and precision acceptable for engineering use under common movie editing (Phase 1 focuses on configurable thresholds and visual tuning).
 
-## 3. 用户与使用场景
+### 4.3 Object Detection & Action/Element Extraction
+- Identify key elements using object detection: People, Objects, Significant Scene Elements.
+- For "Actions", Phase 1 may use heuristics (pose/interaction/displacement) or reserve action recognition interfaces for future specialized models.
+- Output unified `VisualFacts`: Includes object category, confidence, bbox/region, keyframe timestamp, etc.
 
-### 3.1 主要用户
+### 4.4 Face Recognition & Character Database
+- Establish a character database storing facial feature vectors and metadata (Name, Alias, Optional Avatar) for main characters.
+- Real-time Character Recognition: Extract features from detected faces and compare with the database, returning Character ID and Name.
+- Narration prefers character names (e.g., "Joe") over generic terms (e.g., "A man").
 
-- 视障用户（最终使用者）
-- 内容制作/调参人员（配置解说细致程度、风格）
-- 系统集成人员（外部设备/播放器接入视频流）
+### 4.5 Dialogue Detection
+- Accurately identify dialogue segments in the movie (detect human voice/speech from audio).
+- Automatically pause visual narration during dialogue (visual information can still be buffered for summary after dialogue ends).
+- Output: `DialogueSegment` (start/end timestamp) or real-time boolean state `is_dialogue`.
 
-### 3.2 典型流程
+### 4.6 Narration Generation (NLG)
+- Generate natural language descriptions based on `VisualFacts`, `SceneContext`, and Character Recognition results within non-dialogue windows.
+- Support configuration for narration detail and style (e.g., Concise/Detailed; Objective/Cinematic).
+- Phase 1 Output: Timestamped `NarrationSegment` (text + start/end timestamp).
 
-1. 用户提供本地视频文件（MP4/AVI等）或外部设备视频流。
-2. 系统解码帧与音频，建立时间基准。
-3. 进行场景变化检测、视觉要素识别、角色识别。
-4. 对话检测判断当前是否应暂停解说。
-5. 在允许解说的时间窗内生成解说文本片段（含时间戳）。
-6. 向下游（TTS/播放器/日志）输出结构化数据。
+### 4.7 Time Synchronization
+- Unified System Time Base: Use Video PTS or Audio Clock as the master clock to ensure output events align with the video.
+- Support output latency control and buffering strategy configuration (e.g., Max buffer time, sliding window).
 
-## 4. 功能需求
+### 4.8 Output Interface (Reserved for TTS)
+- Standardized Data Interface: Output JSON Lines or gRPC/HTTP (Phase 1 can implement JSON Lines / Python callback).
+- Minimal Fields: `timestamp_start_ms`, `timestamp_end_ms`, `text`, `confidence`, `metadata`.
 
-### 4.1 视觉输入
+### 4.9 Configuration Interface
+- Provide configuration files (YAML/JSON) and runtime parameter overrides.
+- Tunable items:
+  - Narration detail, style
+  - Scene change threshold
+  - Dialogue detection sensitivity
+  - Character recognition threshold
+  - Performance strategy (Sampling rate, Parallelism, GPU/CPU selection)
 
-- 支持标准视频文件：MP4、AVI（优先）以及后续扩展（MKV等）。
-- 设计通用输入接口：支持文件输入与外部设备/网络流输入（一期可先实现文件输入，流输入保留接口）。
-
-### 4.2 场景变化检测
-
-- 实时分析视频流，检测镜头切换/场景变化。
-- 产出：`SceneSegment`（start/end timestamp）或 `SceneChangeEvent`（timestamp）。
-- 指标：在常见电影剪辑下，镜头切换召回率与精确率满足工程可用（一期以可配置阈值与可视化调参为主）。
-
-### 4.3 目标检测与动作/要素提取
-
-- 使用目标检测识别关键元素：人物、主要物体、显著场景要素。
-- 对“动作”一期可用启发式（人物姿态/交互/位移）或预留动作识别接口，后续可替换为专用动作模型。
-- 输出统一的 `VisualFacts`：包含对象类别、置信度、边框/区域、关键帧时间戳等。
-
-### 4.4 面部识别与角色数据库
-
-- 建立角色数据库，存储主要角色的面部特征向量与元信息（姓名、别名、可选头像）。
-- 实时角色识别：对检测到的人脸提取特征并与角色库比对，返回角色ID与姓名。
-- 解说时优先使用角色姓名（如“乔”）而非泛称（如“一个男人”）。
-
-### 4.5 对话检测
-
-- 准确识别电影中的对话时段（从音频中检测人声/对话）。
-- 在对话期间自动暂停画面解说（仍可继续缓存视觉信息用于对话结束后的总结）。
-- 输出：`DialogueSegment`（start/end timestamp）或实时布尔状态 `is_dialogue`。
-
-### 4.6 解说生成（NLG）
-
-- 在无对话窗口内，基于 `VisualFacts`、`SceneContext`、角色识别结果生成自然语言描述。
-- 支持解说详细程度与风格配置（如：简洁/详细；客观/文学化）。
-- 一期输出：带时间戳的 `NarrationSegment`（text + start/end timestamp）。
-
-### 4.7 时间同步
-
-- 统一系统时间基准：以视频PTS或音频时钟为主时钟，保证输出事件与画面时间对齐。
-- 支持输出的延迟控制与缓冲策略配置（例如：最大缓冲时间、滑动窗口）。
-
-### 4.8 输出接口（为TTS预留）
-
-- 标准化数据接口：输出 JSON Lines 或 gRPC/HTTP（一期可先实现 JSON Lines / Python callback）。
-- 最小字段：`timestamp_start_ms`、`timestamp_end_ms`、`text`、`confidence`、`metadata`。
-
-### 4.9 配置接口
-
-- 提供配置文件（YAML/JSON）与运行时参数覆盖。
-- 可调项：
-  - 解说细致程度、风格
-  - 场景切换阈值
-  - 对话检测敏感度
-  - 角色识别阈值
-  - 性能策略（采样率、并行度、GPU/CPU选择）
-
-## 5. 系统架构要求
-
-### 5.1 模块化设计
-
-一期需拆分为清晰模块，模块间以数据结构/接口解耦：
-
-- `InputAdapter`：视频/音频输入
-- `FramePipeline`：帧预处理与调度
+## 5. System Architecture Requirements
+### 5.1 Modular Design
+Phase 1 must be split into clear modules, decoupled by data structures/interfaces:
+- `InputAdapter`: Video/Audio input
+- `FramePipeline`: Frame preprocessing and scheduling
 - `SceneChangeDetector`
-- `ObjectDetector`（PyTorch）
-- `FaceDetector` + `FaceEmbedder`（PyTorch）
-- `CharacterStore`（角色库）
+- `ObjectDetector` (PyTorch)
+- `FaceDetector` + `FaceEmbedder` (PyTorch)
+- `CharacterStore` (Character Database)
 - `DialogueDetector`
-- `NarrationGenerator`（TensorFlow）
-- `Synchronizer`：时间对齐
-- `OutputSink`：输出
+- `NarrationGenerator` (TensorFlow)
+- `Synchronizer`: Time alignment
+- `OutputSink`: Output
 
-### 5.2 可扩展性
+### 5.2 Extensibility
+- Modules primarily defined by interfaces and pluggable implementations (e.g., replacing different detection models).
+- Support for future additions: Action recognition, OCR subtitle recognition, Emotion/Scene atmosphere, etc.
 
-- 模块以接口定义与可插拔实现为主（例如替换不同检测模型）。
-- 支持未来新增：动作识别、OCR字幕识别、情绪/场景氛围等。
+## 6. Technical Implementation Constraints
+- Visual processing uses PyTorch (Inference primarily).
+- Natural Language Generation uses TensorFlow (Inference primarily).
+- Frame processing pipeline must be efficient (Multi-threading/Multi-processing/Async Queues).
+- Must consider 1080p, ≥24fps throughput.
 
-## 6. 技术实现约束
+## 7. Quality & Performance Metrics
+- Character Recognition Accuracy: ≥90% (Based on specified evaluation set).
+- Narration End-to-End Latency: ≤300ms (From video frame to text output).
+- Dialogue Detection False Trigger Rate: <5%.
+- Processing Capability: 1080p, frame rate not lower than 24fps (Verified on target hardware configuration).
 
-- 视觉处理使用 PyTorch（推理为主）。
-- 自然语言生成使用 TensorFlow（推理为主）。
-- 帧处理流水线需高效（多线程/多进程/异步队列）。
-- 需考虑 1080p、≥24fps 的吞吐。
+## 8. Milestones (Suggested)
+- M1: Interface and skeleton running (File Input → Output Text Events).
+- M2: Scene Change + Dialogue Detection + Basic Object Detection integration.
+- M3: Character Database and Real-time Character Recognition integration.
+- M4: NLG (TensorFlow) integration and Style/Detail configuration.
+- M5: Performance stress testing and metric alignment.
 
-## 7. 质量与性能指标
+## 9. Acceptance Criteria
+- On a given sample video:
+  - Can output timestamp-aligned narration segments;
+  - Does not output visual narration during dialogue;
+  - Narration includes character names;
+  - Features configurable style and detail levels;
+  - Output can be consumed by downstream TTS modules.
 
-- 角色识别准确率：≥90%（以指定评测集定义为准）。
-- 画面解说端到端延迟：≤300ms（从画面到文字输出）。
-- 对话检测误触发率：<5%。
-- 处理能力：1080p，帧率不低于24fps（在目标硬件配置上验证）。
-
-## 8. 里程碑（建议）
-
-- M1：接口与骨架跑通（文件输入→输出文本事件）。
-- M2：场景变化 + 对话检测 + 基础目标检测接入。
-- M3：角色库与实时角色识别接入。
-- M4：NLG（TensorFlow）接入与风格/细致程度配置。
-- M5：性能压测与指标对齐。
-
-## 9. 验收标准
-
-- 在给定样例视频上：
-  - 能输出按时间戳对齐的解说片段；
-  - 对话期间不输出画面解说；
-  - 解说包含角色姓名；
-  - 具备可配置的风格与细致程度；
-  - 输出可被下游TTS模块消费。

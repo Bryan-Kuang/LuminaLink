@@ -27,24 +27,24 @@ class TensorFlowTemplateNarrator(NarrationGenerator):
 
         subject = tf.cond(
             tf.size(names_t) > 0,
-            lambda: tf.strings.reduce_join(names_t, separator="、"),
-            lambda: tf.constant("画面中", dtype=tf.string),
+            lambda: tf.strings.reduce_join(names_t, separator=", "),
+            lambda: tf.constant("The scene", dtype=tf.string),
         )
         obj_text = tf.cond(
             tf.size(objs_t) > 0,
-            lambda: tf.strings.reduce_join(objs_t, separator="、"),
+            lambda: tf.strings.reduce_join(objs_t, separator=", "),
             lambda: tf.constant("", dtype=tf.string),
         )
 
         if cfg.style == "detailed":
-            template = tf.constant("{subject}能看到{objects}，细节更清晰。", dtype=tf.string)
+            template = tf.constant("{subject} shows {objects}, with clear details.", dtype=tf.string)
         else:
-            template = tf.constant("{subject}出现了{objects}。", dtype=tf.string)
+            template = tf.constant("{subject} shows {objects}.", dtype=tf.string)
 
         text_t = tf.cond(
             tf.strings.length(obj_text) > 0,
             lambda: tf.strings.format(template, {"subject": subject, "objects": obj_text}),
-            lambda: tf.strings.format("{subject}的画面持续。", {"subject": subject}),
+            lambda: tf.strings.format("{subject} continues.", {"subject": subject}),
         )
         text = str(text_t.numpy().decode("utf-8"))
         return text, 0.65

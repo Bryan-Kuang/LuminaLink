@@ -23,11 +23,11 @@ class RuleBasedNarrationGenerator(NarrationGenerator):
         names = [c.display_name for c in facts.characters[:2]]
         objs = [o.label for o in facts.objects[: max(1, cfg.detail_level)]]
 
-        subject = "、".join(names) if names else "画面中"
+        subject = ", ".join(names) if names else "The scene"
         if objs:
-            obj_text = "、".join(objs)
-            text = f"{subject}出现了{obj_text}。"
+            obj_text = ", ".join(objs)
+            text = f"{subject} shows {obj_text}."
         else:
-            text = f"{subject}发生了变化。" if facts.scene_change else f"{subject}的画面持续。"
+            text = f"{subject} changes." if facts.scene_change else f"{subject} continues."
         return text, 0.55
 

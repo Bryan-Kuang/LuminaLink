@@ -29,7 +29,7 @@ uv sync --extra nlg
 
 ```bash
 luminalink init-character-db --db-path data/characters.sqlite
-luminalink add-character --db-path data/characters.sqlite --name "乔" --face-image /path/to/joe.jpg
+luminalink add-character --db-path data/characters.sqlite --name "Joe" --face-image /path/to/joe.jpg
 ```
 
 Then run:

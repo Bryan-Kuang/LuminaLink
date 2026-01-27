@@ -1,8 +1,8 @@
-# 盲人电影解说系统（一期）ERD
+# Blind-Friendly Movie Narration System (Phase 1) ERD
 
-本ERD用于描述一期工程中“角色库、处理运行、时间片段产物”等核心数据结构。存储可使用 SQLite/PostgreSQL；一期可先用 SQLite 方便本地开发。
+This ERD describes the core data structures for "Character Store, Processing Run, Time Segment Artifacts" in Phase 1. Storage can use SQLite/PostgreSQL; Phase 1 can use SQLite for convenient local development.
 
-## 1. Mermaid ER 图
+## 1. Mermaid ER Diagram
 
 ```mermaid
 erDiagram
@@ -83,8 +83,8 @@ erDiagram
   PROCESSING_RUN ||--o{ NARRATION_SEGMENT : produces
 ```
 
-## 2. 说明
+## 2. Description
+- `CHARACTER` + `FACE_EMBEDDING`: Character database and their face feature vectors (supports multiple samples).
+- `PROCESSING_RUN`: A single processing run, facilitating traceability of configuration and performance.
+- `SCENE_SEGMENT`/`DIALOGUE_SEGMENT`/`NARRATION_SEGMENT`: Core results generated along the timeline.
 
-- `CHARACTER` + `FACE_EMBEDDING`：角色库与其人脸特征向量（可多个样本）。
-- `PROCESSING_RUN`：一次处理运行，便于追溯配置与性能。
-- `SCENE_SEGMENT`/`DIALOGUE_SEGMENT`/`NARRATION_SEGMENT`：按时间轴产出的核心结果。

@@ -110,7 +110,14 @@ class TorchVisionObjectDetector:
         self._to_tensor = to_tensor
         self._model = fasterrcnn_resnet50_fpn(weights="DEFAULT")
         self._model.eval()
-        self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        if torch.backends.mps.is_available():
+            self._device = torch.device("mps")
+        elif torch.cuda.is_available():
+            self._device = torch.device("cuda")
+        else:
+            self._device = torch.device("cpu")
+
         self._model.to(self._device)
 
     def detect(self, frame_bgr: np.ndarray) -> list[DetectedObject]:

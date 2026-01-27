@@ -36,7 +36,9 @@ class DialogueConfig(BaseModel):
 
     enabled: bool = True
     sample_rate_hz: int = Field(default=16000)
-    vad_mode: int = Field(default=2, ge=0, le=3)
+    # Mode 3 is the most aggressive, filtering out non-speech noise.
+    # Recommended for "Pause only for dialogue/voiceover" policy.
+    vad_mode: int = Field(default=3, ge=0, le=3)
     frame_ms: int = Field(default=30)
     start_trigger_frames: int = Field(default=3, ge=1)
     end_trigger_frames: int = Field(default=8, ge=1)
