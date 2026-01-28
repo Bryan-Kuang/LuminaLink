@@ -1,2 +1,0 @@
-"""Natural language generation modules."""
-
