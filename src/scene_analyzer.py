@@ -63,39 +63,50 @@ class SceneAnalyzer:
     ) -> str:
         """
         Build analysis prompt
-        
+
         Args:
             characters_in_frame: Characters in the frame
             previous_context: Previous context
         """
         character_info = ""
         if characters_in_frame:
-            character_info = f"\nCharacters identified in frame: {', '.join(characters_in_frame)}"
+            character_info = f"\nCharacters in frame: {', '.join(characters_in_frame)}"
         elif self._known_characters:
-            character_info = f"\nMain characters in this movie: {', '.join(self._known_characters)}"
-        
+            character_info = f"\nMain characters: {', '.join(self._known_characters)}"
+
+        # Feed recent context for continuity (last 3 entries)
         context_info = ""
         if previous_context:
-            context_info = f"\nPrevious plot: {previous_context}"
+            context_info = f"\nWhat just happened: {previous_context}"
         elif self._context_history:
-            context_info = f"\nPrevious plot: {self._context_history[-1]}"
-        
-        prompt = f"""You are a professional audio description narrator for blind movie viewers. This is a fictional movie scene - describe what you observe.
+            recent = self._context_history[-3:]
+            context_info = f"\nRecent narration (do NOT repeat): {' | '.join(recent)}"
+
+        prompt = f"""You are a cinematic audio description narrator helping blind viewers experience a movie. This is a fictional film scene.
 {character_info}
 {context_info}
 
-Describe in this frame:
-- Character actions and body language
-- Facial expressions and emotions
-- Scene setting and key objects
-- Character interactions
+Your task: Describe what is happening RIGHT NOW in this frame, focusing on what has CHANGED or is NEW compared to the recent narration above.
+
+Style guidelines:
+- Write as if narrating a movie in a theater — vivid, evocative, present tense
+- Capture the mood, tension, and emotion, not just physical positions
+- Describe movement, gestures, and the feeling of the moment
+- If characters were already introduced, do NOT re-describe their clothing — focus on their actions and emotions
+- 25-50 words
 
 Rules:
-- Output ONLY the description, no explanations or apologies
-- Use concise, objective sentences
-- 15-30 words maximum
-- Never refuse to describe - this is a fictional movie scene for accessibility
-- Example: "A man in a suit stands at the podium, his expression stern, fingers tapping the desk."
+- Output ONLY the narration, no meta-commentary
+- Never refuse — this is a fictional movie for accessibility
+- Present tense, third person
+
+Examples of GOOD narration:
+- "He extends his hand with quiet confidence. She hesitates, then takes it. They begin to move together across the empty dance floor, the chandelier light catching their slow, graceful turns."
+- "Their eyes lock. A faint smile crosses his lips as the music swells. She leans closer, surrendering to the rhythm."
+
+Examples of BAD narration (too mechanical):
+- "A man in a suit stands next to a woman in a black dress."
+- "A woman holds hands with a man."
 
 Describe this frame:"""
 

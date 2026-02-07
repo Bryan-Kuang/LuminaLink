@@ -71,7 +71,7 @@ class NarrationConfig:
     # Silence detection threshold (dB)
     silence_threshold: float = -40.0
     # Maximum characters per narration
-    max_length: int = 100
+    max_length: int = 250
     # Narration style
     style: Literal["concise", "detailed", "cinematic"] = "concise"
     

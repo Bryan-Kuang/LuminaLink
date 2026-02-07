@@ -194,13 +194,13 @@ class Narrator:
         if not self._recent_descriptions:
             return False
         
-        # Simple duplicate detection: check keyword overlap
-        text_words = set(text)
-        
+        # Simple duplicate detection: check word overlap
+        text_words = set(text.lower().split())
+
         for recent in self._recent_descriptions[-3:]:
-            recent_words = set(recent)
+            recent_words = set(recent.lower().split())
             overlap = len(text_words & recent_words) / max(len(text_words), 1)
-            if overlap > 0.7:  # 70% overlap considered duplicate
+            if overlap > 0.7:  # 70% word overlap considered duplicate
                 return True
         
         return False

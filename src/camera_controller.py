@@ -77,10 +77,15 @@ class CameraRealtimeController:
         self.audio_detector = RealtimeAudioDetector(
             silence_threshold_db=self.config.narration.silence_threshold
         )
-        self.audio_stream = AudioInputStream(
-            detector=self.audio_detector,
-            sample_rate=22050
-        )
+        try:
+            self.audio_stream = AudioInputStream(
+                detector=self.audio_detector,
+                sample_rate=22050
+            )
+        except (ImportError, Exception) as e:
+            logger.warning(f"Audio input unavailable: {e}")
+            logger.warning("Continuing without dialogue detection")
+            self.audio_stream = None
         self.scene_analyzer = SceneAnalyzer()
         self.narrator = Narrator()
         self.tts_manager = TTSManager()
@@ -139,12 +144,13 @@ class CameraRealtimeController:
             logger.info(f"Camera opened: index={self.camera_index}")
 
             # Start audio stream
-            try:
-                self.audio_stream.start()
-                logger.info("Audio stream started")
-            except Exception as e:
-                logger.warning(f"Failed to start audio stream: {e}")
-                logger.warning("Continuing without audio detection")
+            if self.audio_stream:
+                try:
+                    self.audio_stream.start()
+                    logger.info("Audio stream started")
+                except Exception as e:
+                    logger.warning(f"Failed to start audio stream: {e}")
+                    logger.warning("Continuing without audio detection")
 
             # Start worker threads
             threads = [
@@ -196,10 +202,11 @@ class CameraRealtimeController:
         except Exception as e:
             logger.error(f"Error closing camera: {e}")
 
-        try:
-            self.audio_stream.stop()
-        except Exception as e:
-            logger.error(f"Error stopping audio stream: {e}")
+        if self.audio_stream:
+            try:
+                self.audio_stream.stop()
+            except Exception as e:
+                logger.error(f"Error stopping audio stream: {e}")
 
         try:
             self.audio_player.stop()
@@ -211,108 +218,169 @@ class CameraRealtimeController:
         logger.info("Controller stopped")
 
     def _camera_worker(self):
-        """Camera capture thread"""
+        """Camera capture thread with auto-reconnect on disconnection."""
         last_analysis_time = 0.0
         analysis_interval = self.config.video.keyframe_interval  # Default 1.0 second
+        max_reconnect_attempts = 10
+        base_reconnect_delay = 1.0  # seconds
 
-        try:
-            for video_frame in self.camera_input.frames():
+        while not self._stop_event.is_set():
+            try:
+                for video_frame in self.camera_input.frames():
+                    if self._stop_event.is_set():
+                        return
+
+                    # Wait if paused
+                    self._pause_event.wait()
+
+                    self._frame_count += 1
+
+                    # Send to GUI for display (non-blocking)
+                    if self._on_frame_callback:
+                        try:
+                            self._on_frame_callback(video_frame.image_bgr)
+                        except Exception as e:
+                            logger.error(f"Frame callback error: {e}")
+
+                    # Send to analysis queue at intervals
+                    current_time = video_frame.timestamp
+                    if current_time - last_analysis_time >= analysis_interval:
+                        try:
+                            self._analysis_queue.put_nowait(video_frame)
+                            last_analysis_time = current_time
+                        except:
+                            logger.debug("Analysis queue full, skipping frame")
+
+            except Exception as e:
+                logger.error(f"Camera worker error: {e}")
+
+            # If we get here, the frame iterator exited (camera disconnected)
+            if self._stop_event.is_set():
+                break
+
+            # Attempt reconnection with exponential backoff
+            logger.warning("Camera disconnected, attempting to reconnect...")
+            self._notify_status("Reconnecting")
+
+            for attempt in range(1, max_reconnect_attempts + 1):
                 if self._stop_event.is_set():
                     break
+
+                delay = min(base_reconnect_delay * attempt, 10.0)
+                logger.info(f"Reconnect attempt {attempt}/{max_reconnect_attempts} "
+                            f"in {delay:.0f}s...")
+                self._stop_event.wait(delay)
+
+                if self._stop_event.is_set():
+                    break
+
+                if self.camera_input.reconnect():
+                    logger.info("Camera reconnected successfully")
+                    self._notify_status("Running")
+                    break
+            else:
+                # All attempts failed
+                logger.error(f"Failed to reconnect after {max_reconnect_attempts} attempts")
+                self._notify_status("Camera Lost")
+                break
+
+        logger.info("Camera worker stopped")
+
+    def _analysis_worker(self):
+        """Scene analysis worker thread"""
+        # Create a persistent event loop for this thread to avoid
+        # "Event loop is closed" errors from repeated asyncio.run() calls
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        consecutive_failures = 0
+
+        try:
+            while not self._stop_event.is_set():
+                try:
+                    video_frame = self._analysis_queue.get(timeout=1.0)
+                except Empty:
+                    continue
 
                 # Wait if paused
                 self._pause_event.wait()
 
-                self._frame_count += 1
+                try:
+                    timestamp = video_frame.timestamp
 
-                # Send to GUI for display (non-blocking)
-                if self._on_frame_callback:
+                    # Check if should narrate (minimum interval)
+                    if not self.narrator.should_narrate(timestamp):
+                        logger.debug(f"Skipping narration: too soon (interval)")
+                        continue
+
+                    # Check if silence (no dialogue)
+                    if not self.audio_detector.is_current_silence():
+                        logger.debug(f"Skipping narration: dialogue detected")
+                        continue
+
+                    # Back off if API keeps failing
+                    if consecutive_failures >= 3:
+                        backoff = min(30, 5 * consecutive_failures)
+                        logger.warning(
+                            f"API failed {consecutive_failures} times, "
+                            f"backing off {backoff}s"
+                        )
+                        self._stop_event.wait(backoff)
+                        if self._stop_event.is_set():
+                            break
+
+                    # Recognize characters (optional)
+                    characters = []
                     try:
-                        self._on_frame_callback(video_frame.image_bgr)
+                        if hasattr(self.character_recognizer, 'is_enabled') and \
+                           self.character_recognizer.is_enabled():
+                            characters = self.character_recognizer.get_characters_in_frame(
+                                video_frame.image_bgr,
+                                timestamp=timestamp
+                            )
                     except Exception as e:
-                        logger.error(f"Frame callback error: {e}")
+                        logger.warning(f"Character recognition error: {e}")
 
-                # Send to analysis queue at intervals
-                current_time = video_frame.timestamp
-                if current_time - last_analysis_time >= analysis_interval:
+                    # Analyze scene (async AI call on persistent loop)
                     try:
-                        self._analysis_queue.put_nowait(video_frame)
-                        last_analysis_time = current_time
-                    except:
-                        logger.debug("Analysis queue full, skipping frame")
+                        analysis = loop.run_until_complete(
+                            self.scene_analyzer.analyze_frame_async(
+                                video_frame.image_bgr,
+                                characters_in_frame=characters,
+                                timestamp=timestamp
+                            )
+                        )
+                    except Exception as e:
+                        logger.error(f"Scene analysis error: {e}")
+                        consecutive_failures += 1
+                        continue
 
-        except Exception as e:
-            logger.error(f"Camera worker error: {e}")
+                    # Check if analysis was a fallback (API failure)
+                    if analysis.confidence == 0.0:
+                        consecutive_failures += 1
+                        continue
+
+                    consecutive_failures = 0
+
+                    # Generate narration
+                    try:
+                        narration = self.narrator.generate_narration(
+                            analysis,
+                            slot=(timestamp, timestamp + 5.0),
+                            characters_in_frame=characters
+                        )
+
+                        if narration:
+                            self._narration_queue.put(narration)
+                            logger.info(f"Narration generated: {narration.text[:50]}...")
+                    except Exception as e:
+                        logger.error(f"Narration generation error: {e}")
+
+                except Exception as e:
+                    logger.error(f"Analysis worker error: {e}")
         finally:
-            logger.info("Camera worker stopped")
-
-    def _analysis_worker(self):
-        """Scene analysis worker thread"""
-        while not self._stop_event.is_set():
-            try:
-                video_frame = self._analysis_queue.get(timeout=1.0)
-            except Empty:
-                continue
-
-            # Wait if paused
-            self._pause_event.wait()
-
-            try:
-                timestamp = video_frame.timestamp
-
-                # Check if should narrate (minimum interval)
-                if not self.narrator.should_narrate(timestamp):
-                    logger.debug(f"Skipping narration: too soon (interval)")
-                    continue
-
-                # Check if silence (no dialogue)
-                if not self.audio_detector.is_current_silence():
-                    logger.debug(f"Skipping narration: dialogue detected")
-                    continue
-
-                # Recognize characters (optional)
-                characters = []
-                try:
-                    if hasattr(self.character_recognizer, 'is_enabled') and \
-                       self.character_recognizer.is_enabled():
-                        characters = self.character_recognizer.get_characters_in_frame(
-                            video_frame.image_bgr,
-                            timestamp=timestamp
-                        )
-                except Exception as e:
-                    logger.warning(f"Character recognition error: {e}")
-
-                # Analyze scene (async AI call)
-                try:
-                    analysis = asyncio.run(
-                        self.scene_analyzer.analyze_frame_async(
-                            video_frame.image_bgr,
-                            characters_in_frame=characters,
-                            timestamp=timestamp
-                        )
-                    )
-                except Exception as e:
-                    logger.error(f"Scene analysis error: {e}")
-                    continue
-
-                # Generate narration
-                try:
-                    narration = self.narrator.generate_narration(
-                        analysis,
-                        slot=(timestamp, timestamp + 5.0),
-                        characters_in_frame=characters
-                    )
-
-                    if narration:
-                        self._narration_queue.put(narration)
-                        logger.info(f"Narration generated: {narration.text[:50]}...")
-                except Exception as e:
-                    logger.error(f"Narration generation error: {e}")
-
-            except Exception as e:
-                logger.error(f"Analysis worker error: {e}")
-
-        logger.info("Analysis worker stopped")
+            loop.run_until_complete(loop.shutdown_asyncgens())
+            loop.close()
+            logger.info("Analysis worker stopped")
 
     def _narration_worker(self):
         """TTS generation and playback worker thread"""
@@ -350,12 +418,6 @@ class CameraRealtimeController:
                     self._narration_count += 1
                 except Exception as e:
                     logger.error(f"Audio playback error: {e}")
-
-                # Update narrator state
-                try:
-                    self.narrator.record_narration(narration)
-                except Exception as e:
-                    logger.error(f"Error recording narration: {e}")
 
                 # Clear current narration
                 self.state.current_narration = None
