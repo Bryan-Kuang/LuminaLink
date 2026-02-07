@@ -1,196 +1,215 @@
-# 🎬 LuminaLink - 盲人电影智能讲解系统
+# LuminaLink
 
-LuminaLink 是一个基于 AI 的视频实时讲解系统，专为视障人士设计。它能够分析视频内容，在无对话场景中自动生成情节描述，并能识别和记忆角色，用角色名称而非泛指进行讲解。
+**AI-Powered Movie Audio Description for the Visually Impaired**
 
-## ✨ 核心功能
+LuminaLink is an intelligent video analysis system that provides real-time audio descriptions of movies and videos for visually impaired audiences. It uses advanced AI to analyze scenes, recognize characters, and generate natural language narrations.
 
-- **🎥 实时视频分析** - 支持本地视频文件和实时流媒体
-- **🔇 智能静音检测** - 自动识别无对话片段，在适当时机插入讲解
-- **👤 角色识别与记忆** - 识别并记住电影中的角色，使用角色名进行讲解
-- **🎭 场景理解** - 理解复杂场景，描述动作、情感和环境
-- **🔊 自然语音合成** - 将讲解文字转换为自然流畅的语音
-- **⏱️ 实时同步** - 讲解与视频播放实时同步
+## Features
 
-## 🏗️ 系统架构
+- 🎬 **Smart Video Analysis**: Automatically detects key scenes and important visual changes
+- 👤 **Character Recognition**: Identifies and tracks characters throughout the video, using actual names instead of generic descriptions
+- 🎙️ **Natural Narration**: Generates concise, descriptive narrations that fit during dialogue pauses
+- 🔊 **Text-to-Speech**: High-quality voice synthesis for audio output
+- 📝 **Subtitle Export**: Export narrations as SRT subtitle files
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      视频输入流                               │
-└─────────────────┬───────────────────────────────────────────┘
-                  │
-                  ▼
-┌─────────────────────────────────────────────────────────────┐
-│              VideoProcessor (视频处理模块)                    │
-│   - 视频帧提取                                                │
-│   - 关键帧检测                                                │
-│   - 场景切换检测                                              │
-└─────────────────┬───────────────────────────────────────────┘
-                  │
-          ┌───────┴───────┐
-          ▼               ▼
-┌─────────────────┐ ┌─────────────────────────────────────────┐
-│  AudioDetector  │ │        CharacterRecognizer              │
-│  (音频检测)      │ │        (角色识别模块)                     │
-│  - 对话检测      │ │   - 人脸检测与识别                        │
-│  - 静音片段识别  │ │   - 角色数据库管理                        │
-└────────┬────────┘ │   - 角色名称映射                          │
-         │          └─────────────────┬───────────────────────┘
-         │                            │
-         └──────────┬─────────────────┘
-                    ▼
-┌─────────────────────────────────────────────────────────────┐
-│              SceneAnalyzer (场景分析模块)                     │
-│   - 多模态 AI 模型调用 (GPT-4V / Gemini / Qwen-VL)           │
-│   - 场景内容理解                                              │
-│   - 动作与情感识别                                            │
-└─────────────────┬───────────────────────────────────────────┘
-                  │
-                  ▼
-┌─────────────────────────────────────────────────────────────┐
-│              Narrator (讲解生成模块)                          │
-│   - 讲解文本生成                                              │
-│   - 时间轴管理                                                │
-│   - 讲解风格控制                                              │
-└─────────────────┬───────────────────────────────────────────┘
-                  │
-                  ▼
-┌─────────────────────────────────────────────────────────────┐
-│              TTSEngine (语音合成模块)                         │
-│   - 文字转语音                                                │
-│   - 音频输出                                                  │
-└─────────────────────────────────────────────────────────────┘
-```
+## Installation
 
-## 📦 安装
+### Prerequisites
 
-### 1. 克隆项目
+- Python 3.8+
+- FFmpeg (for audio processing)
+- OpenAI API key
+
+### Setup
+
+1. Clone the repository:
 
 ```bash
-cd /Users/bryan/Desktop/Projects/LuminaLink
+git clone https://github.com/yourusername/LuminaLink.git
+cd LuminaLink
 ```
 
-### 2. 创建虚拟环境
+2. Create a virtual environment:
 
 ```bash
 python -m venv venv
-source venv/bin/activate  # macOS/Linux
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-### 3. 安装依赖
+3. Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. 配置环境变量
+4. Configure environment variables:
 
 ```bash
 cp .env.example .env
-# 编辑 .env 文件，填入你的 API 密钥
+# Edit .env and add your API keys
 ```
 
-## 🚀 使用方法
+## Usage
 
-### 基本使用
+### Basic Usage
+
+Generate narration subtitles for a video:
 
 ```bash
-# 分析本地视频文件
-python -m src.main --video path/to/movie.mp4
-
-# 指定角色配置文件
-python -m src.main --video movie.mp4 --characters characters.json
-
-# 实时预览模式
-python -m src.main --video movie.mp4 --preview
+python -m src.main --video path/to/video.mp4 --output narration.srt
 ```
 
-### 角色配置
+### With Character Configuration
 
-在开始观看电影前，可以预先配置角色信息：
-
-```bash
-# 启动角色录入模式
-python -m src.main --register-characters --video movie.mp4
-```
-
-或创建 `characters.json` 文件：
+Create a character configuration file to improve character recognition:
 
 ```json
 {
   "characters": [
     {
-      "name": "小明",
-      "aliases": ["主角", "男主"],
-      "face_images": ["xiaoming_1.jpg", "xiaoming_2.jpg"]
+      "name": "Charlie",
+      "aliases": ["Lt. Col. Slade", "Colonel"],
+      "description": "A retired Army officer"
     },
     {
-      "name": "小红",
-      "aliases": ["女主"],
-      "face_images": ["xiaohong_1.jpg"]
+      "name": "Frank",
+      "aliases": ["Frank Slade"],
+      "description": "The main character"
     }
   ]
 }
 ```
 
-## ⚙️ 配置选项
+Then run with the config:
 
-在 `src/config.py` 中可以调整以下参数：
+```bash
+python -m src.main --video video.mp4 --characters characters.json --output narration.srt
+```
 
-| 参数                         | 说明               | 默认值                 |
-| ---------------------------- | ------------------ | ---------------------- |
-| `NARRATION_INTERVAL`         | 讲解最小间隔（秒） | 5.0                    |
-| `SILENCE_THRESHOLD`          | 静音检测阈值（dB） | -40                    |
-| `FACE_RECOGNITION_THRESHOLD` | 人脸识别置信度阈值 | 0.6                    |
-| `SCENE_CHANGE_THRESHOLD`     | 场景切换检测阈值   | 0.3                    |
-| `TTS_SPEED`                  | 语音播放速度       | 1.0                    |
-| `TTS_VOICE`                  | 语音类型           | "zh-CN-XiaoxiaoNeural" |
+### Real-time Preview
 
-## 🔑 API 配置
+Enable preview mode to see the video with narration overlays:
 
-支持多种多模态 AI 模型：
+```bash
+python -m src.main --video video.mp4 --preview
+```
 
-- **OpenAI GPT-4 Vision** - 设置 `OPENAI_API_KEY`
-- **Google Gemini** - 设置 `GOOGLE_API_KEY`
-- **阿里通义千问 VL** - 设置 `DASHSCOPE_API_KEY`
-- **本地模型** - 支持 LLaVA 等本地部署模型
+## Configuration
 
-## 📁 项目结构
+### Environment Variables
+
+| Variable               | Description                      | Default            |
+| ---------------------- | -------------------------------- | ------------------ |
+| `OPENAI_API_KEY`       | OpenAI API key (required)        | -                  |
+| `OPENAI_MODEL`         | Model to use for analysis        | `gpt-4o`           |
+| `TTS_ENGINE`           | TTS engine (edge, gtts, pyttsx3) | `edge`             |
+| `TTS_VOICE`            | Voice for narration              | `en-US-AriaNeural` |
+| `TTS_SPEED`            | Speech rate                      | `1.0`              |
+| `NARRATION_INTERVAL`   | Min seconds between narrations   | `5`                |
+| `NARRATION_MAX_LENGTH` | Max characters per narration     | `100`              |
+
+### TTS Voices
+
+For Edge TTS, you can use voices like:
+
+- `en-US-AriaNeural` - Female, US English
+- `en-US-GuyNeural` - Male, US English
+- `en-GB-SoniaNeural` - Female, UK English
+- `zh-CN-XiaoxiaoNeural` - Female, Chinese
+
+## Project Structure
 
 ```
 LuminaLink/
 ├── src/
 │   ├── __init__.py
-│   ├── main.py                 # 主程序入口
-│   ├── config.py               # 配置管理
-│   ├── video_processor.py      # 视频处理
-│   ├── audio_detector.py       # 音频/对话检测
-│   ├── character_recognizer.py # 角色识别
-│   ├── scene_analyzer.py       # 场景分析
-│   ├── narrator.py             # 讲解生成
-│   └── tts_engine.py           # 语音合成
-├── data/
-│   ├── characters/             # 角色图片库
-│   └── cache/                  # 缓存目录
-├── requirements.txt
-├── .env.example
-└── README.md
+│   ├── config.py          # Configuration management
+│   ├── video_processor.py # Video frame extraction
+│   ├── audio_detector.py  # Audio/silence detection
+│   ├── character_recognizer.py  # Character recognition
+│   ├── scene_analyzer.py  # AI scene analysis
+│   ├── narrator.py        # Narration generation
+│   ├── tts_engine.py      # Text-to-speech
+│   ├── main.py            # Main entry point
+│   └── realtime_player.py # Realtime playback
+├── tests/
+│   └── test_modules.py    # Unit tests
+├── .env.example           # Environment template
+├── requirements.txt       # Dependencies
+└── README.md              # This file
 ```
 
-## 🎯 工作流程
+## How It Works
 
-1. **视频加载** - 加载视频文件或连接流媒体
-2. **音频分析** - 检测对话和静音片段
-3. **帧提取** - 在静音片段提取关键帧
-4. **角色识别** - 识别画面中的角色
-5. **场景分析** - AI 分析场景内容
-6. **讲解生成** - 生成自然语言讲解
-7. **语音合成** - 将讲解转换为语音
-8. **音频混合** - 将讲解音频与原视频混合输出
+1. **Video Processing**: Extracts frames at regular intervals and detects scene changes
+2. **Audio Analysis**: Identifies silent periods suitable for narration insertion
+3. **Character Recognition**: Uses face detection/recognition to identify characters
+4. **Scene Analysis**: Sends frames to GPT-4o Vision for detailed scene understanding
+5. **Narration Generation**: Creates concise, natural descriptions of the action
+6. **TTS Synthesis**: Converts narrations to speech audio
+7. **Subtitle Export**: Outputs timed subtitles in SRT format
 
-## 🤝 贡献
+## API Usage
 
-欢迎提交 Issue 和 Pull Request！
+### Python API
 
-## 📄 许可证
+```python
+from src.main import LuminaLink
+import asyncio
 
-MIT License
+app = LuminaLink(
+    video_path="movie.mp4",
+    output_subtitles="narration.srt"
+)
+
+asyncio.run(app.run())
+```
+
+### Character Recognition API
+
+```python
+from src.character_recognizer import CharacterRecognizer
+
+recognizer = CharacterRecognizer()
+recognizer.add_character(
+    name="John",
+    aliases=["Johnny", "Mr. Smith"],
+    description="The protagonist"
+)
+
+# Get characters in a frame
+characters = recognizer.get_characters_in_frame(frame, timestamp=0.0)
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **"Module not found" errors**
+   - Make sure you've activated the virtual environment
+   - Run `pip install -r requirements.txt`
+
+2. **OpenAI API errors**
+   - Check your API key in `.env`
+   - Ensure you have API credits available
+
+3. **Audio extraction fails**
+   - Install FFmpeg: `brew install ffmpeg` (macOS) or `apt install ffmpeg` (Linux)
+
+4. **Character recognition not working**
+   - Install face_recognition: `pip install face_recognition`
+   - On macOS, you may need: `brew install cmake dlib`
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- OpenAI for GPT-4 Vision API
+- Microsoft for Edge TTS
+- OpenCV and face_recognition libraries

@@ -56,6 +56,9 @@ data/cache/*
 *.mkv
 *.mov
 
+# Generated subtitle files
+*.srt
+
 # Logs
 *.log
 logs/

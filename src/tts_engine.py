@@ -1,7 +1,7 @@
 """
-语音合成模块
+Text-to-Speech Module
 
-将讲解文本转换为语音，支持多种 TTS 引擎
+Converts narration text to speech, supports multiple TTS engines
 """
 
 import asyncio
@@ -20,16 +20,16 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class TTSResult:
-    """TTS 结果"""
-    audio_path: str           # 音频文件路径
-    duration: float           # 音频时长（秒）
-    text: str                 # 原始文本
+    """TTS Result"""
+    audio_path: str           # Audio file path
+    duration: float           # Audio duration (seconds)
+    text: str                 # Original text
     success: bool = True
     error: Optional[str] = None
 
 
 class TTSEngine:
-    """TTS 引擎基类"""
+    """TTS Engine Base Class"""
     
     def __init__(self):
         self.config = get_config().tts
@@ -38,41 +38,41 @@ class TTSEngine:
     
     async def synthesize(self, text: str, output_path: Optional[str] = None) -> TTSResult:
         """
-        合成语音
+        Synthesize speech
         
         Args:
-            text: 要合成的文本
-            output_path: 输出路径，如果为 None 则使用临时文件
+            text: Text to synthesize
+            output_path: Output path, uses temp file if None
         
         Returns:
-            TTSResult 对象
+            TTSResult object
         """
         raise NotImplementedError
     
     def synthesize_sync(self, text: str, output_path: Optional[str] = None) -> TTSResult:
-        """同步合成语音"""
+        """Synchronous speech synthesis"""
         return asyncio.run(self.synthesize(text, output_path))
     
     def _get_temp_path(self) -> str:
-        """获取临时文件路径"""
+        """Get temporary file path"""
         fd, path = tempfile.mkstemp(suffix=".mp3", dir=self._cache_dir)
         os.close(fd)
         return path
     
     def _get_audio_duration(self, audio_path: str) -> float:
-        """获取音频时长"""
+        """Get audio duration"""
         try:
             from pydub import AudioSegment
             audio = AudioSegment.from_file(audio_path)
             return len(audio) / 1000.0
         except Exception as e:
-            logger.warning(f"无法获取音频时长: {e}")
-            # 估算时长（每秒约5个中文字）
+            logger.warning(f"Failed to get audio duration: {e}")
+            # Estimate duration (about 5 Chinese chars per second)
             return 0.0
 
 
 class EdgeTTSEngine(TTSEngine):
-    """微软 Edge TTS 引擎（免费，高质量）"""
+    """Microsoft Edge TTS Engine (free, high quality)"""
     
     async def synthesize(self, text: str, output_path: Optional[str] = None) -> TTSResult:
         try:
@@ -80,17 +80,17 @@ class EdgeTTSEngine(TTSEngine):
             
             output_path = output_path or self._get_temp_path()
             
-            # 创建通信对象
+            # Create communicate object
             communicate = edge_tts.Communicate(
                 text=text,
                 voice=self.config.voice,
                 rate=self._format_rate(self.config.speed)
             )
             
-            # 保存到文件
+            # Save to file
             await communicate.save(output_path)
             
-            # 获取时长
+            # Get duration
             duration = self._get_audio_duration(output_path)
             
             return TTSResult(
@@ -101,7 +101,7 @@ class EdgeTTSEngine(TTSEngine):
             )
             
         except Exception as e:
-            logger.error(f"Edge TTS 合成失败: {e}")
+            logger.error(f"Edge TTS synthesis failed: {e}")
             return TTSResult(
                 audio_path="",
                 duration=0.0,
@@ -111,7 +111,7 @@ class EdgeTTSEngine(TTSEngine):
             )
     
     def _format_rate(self, speed: float) -> str:
-        """格式化语速"""
+        """Format speech rate"""
         if speed == 1.0:
             return "+0%"
         elif speed > 1.0:
@@ -121,18 +121,18 @@ class EdgeTTSEngine(TTSEngine):
     
     @staticmethod
     async def list_voices(language: str = "zh") -> list:
-        """列出可用的语音"""
+        """List available voices"""
         try:
             import edge_tts
             voices = await edge_tts.list_voices()
             return [v for v in voices if v["Locale"].startswith(language)]
         except Exception as e:
-            logger.error(f"获取语音列表失败: {e}")
+            logger.error(f"Failed to get voice list: {e}")
             return []
 
 
 class GTTSEngine(TTSEngine):
-    """Google TTS 引擎"""
+    """Google TTS Engine"""
     
     async def synthesize(self, text: str, output_path: Optional[str] = None) -> TTSResult:
         try:
@@ -140,7 +140,7 @@ class GTTSEngine(TTSEngine):
             
             output_path = output_path or self._get_temp_path()
             
-            # 使用线程池执行同步操作
+            # Use thread pool for sync operation
             await asyncio.to_thread(self._synthesize_sync, text, output_path)
             
             duration = self._get_audio_duration(output_path)
@@ -153,7 +153,7 @@ class GTTSEngine(TTSEngine):
             )
             
         except Exception as e:
-            logger.error(f"gTTS 合成失败: {e}")
+            logger.error(f"gTTS synthesis failed: {e}")
             return TTSResult(
                 audio_path="",
                 duration=0.0,
@@ -169,7 +169,7 @@ class GTTSEngine(TTSEngine):
 
 
 class Pyttsx3Engine(TTSEngine):
-    """pyttsx3 本地 TTS 引擎"""
+    """pyttsx3 Local TTS Engine"""
     
     def __init__(self):
         super().__init__()
@@ -198,7 +198,7 @@ class Pyttsx3Engine(TTSEngine):
             )
             
         except Exception as e:
-            logger.error(f"pyttsx3 合成失败: {e}")
+            logger.error(f"pyttsx3 synthesis failed: {e}")
             return TTSResult(
                 audio_path="",
                 duration=0.0,
@@ -214,14 +214,14 @@ class Pyttsx3Engine(TTSEngine):
 
 
 class TTSManager:
-    """TTS 管理器"""
+    """TTS Manager"""
     
     def __init__(self, engine_type: Optional[str] = None):
         """
-        初始化 TTS 管理器
+        Initialize TTS Manager
         
         Args:
-            engine_type: 引擎类型 (edge, gtts, pyttsx3)
+            engine_type: Engine type (edge, gtts, pyttsx3)
         """
         config = get_config().tts
         engine_type = engine_type or config.engine
@@ -233,27 +233,27 @@ class TTSManager:
         elif engine_type == "pyttsx3":
             self.engine = Pyttsx3Engine()
         else:
-            logger.warning(f"未知的 TTS 引擎: {engine_type}，使用 Edge TTS")
+            logger.warning(f"Unknown TTS engine: {engine_type}, using Edge TTS")
             self.engine = EdgeTTSEngine()
         
-        logger.info(f"TTS 引擎已初始化: {engine_type}")
+        logger.info(f"TTS engine initialized: {engine_type}")
         
-        # 音频播放回调
+        # Audio playback callback
         self._play_callback: Optional[Callable[[str], Awaitable[None]]] = None
     
     def set_play_callback(self, callback: Callable[[str], Awaitable[None]]):
-        """设置音频播放回调"""
+        """Set audio playback callback"""
         self._play_callback = callback
     
     async def speak(self, text: str) -> TTSResult:
         """
-        合成并播放语音
+        Synthesize and play speech
         
         Args:
-            text: 要播放的文本
+            text: Text to play
         
         Returns:
-            TTSResult 对象
+            TTSResult object
         """
         result = await self.engine.synthesize(text)
         
@@ -263,16 +263,16 @@ class TTSManager:
         return result
     
     def speak_sync(self, text: str) -> TTSResult:
-        """同步合成并播放"""
+        """Synchronous synthesis and playback"""
         return asyncio.run(self.speak(text))
     
     async def synthesize(self, text: str, output_path: Optional[str] = None) -> TTSResult:
-        """合成语音（不播放）"""
+        """Synthesize speech (without playback)"""
         return await self.engine.synthesize(text, output_path)
 
 
 class AudioPlayer:
-    """音频播放器"""
+    """Audio Player"""
     
     def __init__(self):
         self._playing = False
@@ -280,14 +280,14 @@ class AudioPlayer:
     
     async def play(self, audio_path: str, block: bool = True):
         """
-        播放音频
+        Play audio
         
         Args:
-            audio_path: 音频文件路径
-            block: 是否阻塞直到播放完成
+            audio_path: Audio file path
+            block: Whether to block until playback completes
         """
         if not os.path.exists(audio_path):
-            logger.error(f"音频文件不存在: {audio_path}")
+            logger.error(f"Audio file not found: {audio_path}")
             return
         
         self._playing = True
@@ -301,107 +301,97 @@ class AudioPlayer:
                 cmd = ["aplay", audio_path]
             # Windows
             else:
-                cmd = ["powershell", "-c", f"(New-Object Media.SoundPlayer '{audio_path}').PlaySync()"]
+                cmd = ["powershell", "-c", f'(New-Object Media.SoundPlayer "{audio_path}").PlaySync()']
             
             if block:
-                await asyncio.to_thread(subprocess.run, cmd, capture_output=True)
+                await asyncio.to_thread(subprocess.run, cmd, check=True)
             else:
-                self._current_process = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                self._current_process = subprocess.Popen(cmd)
                 
         except Exception as e:
-            logger.error(f"播放音频失败: {e}")
+            logger.error(f"Audio playback failed: {e}")
         finally:
             self._playing = False
     
     def stop(self):
-        """停止播放"""
+        """Stop playback"""
         if self._current_process:
             self._current_process.terminate()
             self._current_process = None
         self._playing = False
     
+    @property
     def is_playing(self) -> bool:
-        """是否正在播放"""
+        """Check if playing"""
         return self._playing
 
 
 class NarrationPlayer:
-    """讲解音频播放器"""
+    """Narration Player - pre-generates and plays narration"""
     
-    def __init__(self, tts_manager: Optional[TTSManager] = None):
-        self.tts = tts_manager or TTSManager()
-        self.player = AudioPlayer()
-        
-        # 预生成的音频缓存
-        self._audio_cache: dict = {}
-    
-    async def prepare_narration(self, text: str, narration_id: str) -> Optional[str]:
+    def __init__(self, tts_manager: TTSManager):
         """
-        预生成讲解音频
+        Initialize narration player
         
         Args:
-            text: 讲解文本
-            narration_id: 讲解 ID
-        
-        Returns:
-            音频文件路径
+            tts_manager: TTS manager
         """
-        if narration_id in self._audio_cache:
-            return self._audio_cache[narration_id]
+        self.tts_manager = tts_manager
+        self.audio_player = AudioPlayer()
         
-        result = await self.tts.synthesize(text)
+        # Pre-generated audio cache
+        self._cache: Dict[str, TTSResult] = {}
+    
+    async def prepare_narration(self, text: str, narration_id: str):
+        """
+        Pre-generate narration audio
+        
+        Args:
+            text: Narration text
+            narration_id: Narration ID
+        """
+        if narration_id in self._cache:
+            return
+        
+        result = await self.tts_manager.synthesize(text)
         
         if result.success:
-            self._audio_cache[narration_id] = result.audio_path
-            return result.audio_path
-        
-        return None
+            self._cache[narration_id] = result
+            logger.debug(f"Pre-generated narration: {narration_id}")
     
-    async def play_narration(self, text: str, block: bool = True) -> bool:
+    async def play_narration(self, narration_id: str):
         """
-        播放讲解
+        Play pre-generated narration
         
         Args:
-            text: 讲解文本
-            block: 是否阻塞
-        
-        Returns:
-            是否成功
+            narration_id: Narration ID
         """
-        result = await self.tts.synthesize(text)
+        if narration_id not in self._cache:
+            logger.warning(f"Narration not found in cache: {narration_id}")
+            return
         
-        if result.success:
-            await self.player.play(result.audio_path, block)
-            return True
-        
-        return False
+        result = self._cache[narration_id]
+        await self.audio_player.play(result.audio_path)
     
-    async def play_prepared(self, narration_id: str, block: bool = True) -> bool:
-        """
-        播放预生成的讲解
-        
-        Args:
-            narration_id: 讲解 ID
-            block: 是否阻塞
-        
-        Returns:
-            是否成功
-        """
-        if narration_id not in self._audio_cache:
-            return False
-        
-        await self.player.play(self._audio_cache[narration_id], block)
-        return True
-    
-    def stop(self):
-        """停止播放"""
-        self.player.stop()
+    def get_narration_duration(self, narration_id: str) -> float:
+        """Get pre-generated narration duration"""
+        if narration_id in self._cache:
+            return self._cache[narration_id].duration
+        return 0.0
     
     def clear_cache(self):
-        """清除音频缓存"""
-        for path in self._audio_cache.values():
-            try:
-                os.remove(path)
-            except:
-                pass
-        self._audio_cache.clear()
+        """Clear cache"""
+        # Delete audio files
+        for result in self._cache.values():
+            if os.path.exists(result.audio_path):
+                try:
+                    os.remove(result.audio_path)
+                except:
+                    pass
+        
+        self._cache.clear()
+        logger.info("Narration cache cleared")
+
+
+# For backward compatibility
+from typing import Dict

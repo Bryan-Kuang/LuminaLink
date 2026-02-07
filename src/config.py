@@ -1,7 +1,7 @@
 """
-配置管理模块
+Configuration Module
 
-管理系统的所有配置参数，支持从环境变量和配置文件加载
+Manages all system configuration parameters, supports loading from environment variables and config files
 """
 
 import os
@@ -10,17 +10,17 @@ from dataclasses import dataclass, field
 from typing import Optional, Literal
 from dotenv import load_dotenv
 
-# 加载环境变量
+# Load environment variables
 load_dotenv()
 
-# 项目根目录
+# Project root directory
 PROJECT_ROOT = Path(__file__).parent.parent
 
 
 @dataclass
 class AIConfig:
-    """AI 模型配置"""
-    # 默认提供商
+    """AI Model Configuration"""
+    # Default provider
     provider: Literal["openai", "google", "dashscope", "local"] = "openai"
     
     # OpenAI
@@ -32,11 +32,11 @@ class AIConfig:
     google_api_key: str = ""
     gemini_model: str = "gemini-pro-vision"
     
-    # 阿里云 DashScope
+    # Alibaba DashScope
     dashscope_api_key: str = ""
     qwen_model: str = "qwen-vl-max"
     
-    # 本地模型
+    # Local model
     local_model_path: str = ""
     
     def __post_init__(self):
@@ -52,7 +52,7 @@ class AIConfig:
 
 @dataclass
 class TTSConfig:
-    """语音合成配置"""
+    """Text-to-Speech Configuration"""
     engine: Literal["edge", "gtts", "pyttsx3"] = "edge"
     voice: str = "zh-CN-XiaoxiaoNeural"
     speed: float = 1.0
@@ -65,15 +65,15 @@ class TTSConfig:
 
 @dataclass
 class NarrationConfig:
-    """讲解参数配置"""
-    # 最小讲解间隔（秒）
+    """Narration Parameters Configuration"""
+    # Minimum narration interval (seconds)
     interval: float = 5.0
-    # 静音检测阈值（dB）
+    # Silence detection threshold (dB)
     silence_threshold: float = -40.0
-    # 每次讲解最大字数
+    # Maximum characters per narration
     max_length: int = 100
-    # 讲解风格
-    style: Literal["简洁", "详细", "电影解说"] = "简洁"
+    # Narration style
+    style: Literal["concise", "detailed", "cinematic"] = "concise"
     
     def __post_init__(self):
         self.interval = float(os.getenv("NARRATION_INTERVAL", self.interval))
@@ -83,12 +83,12 @@ class NarrationConfig:
 
 @dataclass
 class FaceRecognitionConfig:
-    """人脸识别配置"""
-    # 识别置信度阈值
+    """Face Recognition Configuration"""
+    # Recognition confidence threshold
     threshold: float = 0.6
-    # 检测模型
+    # Detection model
     detection_model: Literal["hog", "cnn"] = "hog"
-    # 是否启用深度学习增强
+    # Enable deep learning enhancement
     use_deep_learning: bool = False
     
     def __post_init__(self):
@@ -98,15 +98,15 @@ class FaceRecognitionConfig:
 
 @dataclass
 class VideoConfig:
-    """视频处理配置"""
-    # 关键帧提取间隔（秒）
+    """Video Processing Configuration"""
+    # Keyframe extraction interval (seconds)
     keyframe_interval: float = 1.0
-    # 场景切换检测阈值
+    # Scene change detection threshold
     scene_change_threshold: float = 0.3
-    # 预览窗口大小
+    # Preview window size
     preview_width: int = 800
     preview_height: int = 450
-    # 分析帧率
+    # Analysis frame rate
     analysis_fps: int = 1
     
     def __post_init__(self):
@@ -118,7 +118,7 @@ class VideoConfig:
 
 @dataclass
 class PathConfig:
-    """路径配置"""
+    """Path Configuration"""
     cache_dir: Path = field(default_factory=lambda: PROJECT_ROOT / "data" / "cache")
     characters_dir: Path = field(default_factory=lambda: PROJECT_ROOT / "data" / "characters")
     models_dir: Path = field(default_factory=lambda: PROJECT_ROOT / "data" / "models")
@@ -132,7 +132,7 @@ class PathConfig:
         if chars:
             self.characters_dir = Path(chars)
         
-        # 确保目录存在
+        # Ensure directories exist
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.characters_dir.mkdir(parents=True, exist_ok=True)
         self.models_dir.mkdir(parents=True, exist_ok=True)
@@ -140,7 +140,7 @@ class PathConfig:
 
 @dataclass
 class Config:
-    """主配置类"""
+    """Main Configuration Class"""
     ai: AIConfig = field(default_factory=AIConfig)
     tts: TTSConfig = field(default_factory=TTSConfig)
     narration: NarrationConfig = field(default_factory=NarrationConfig)
@@ -148,24 +148,24 @@ class Config:
     video: VideoConfig = field(default_factory=VideoConfig)
     paths: PathConfig = field(default_factory=PathConfig)
     
-    # 日志级别
+    # Log level
     log_level: str = "INFO"
     
     def __post_init__(self):
         self.log_level = os.getenv("LOG_LEVEL", self.log_level)
 
 
-# 全局配置实例
+# Global configuration instance
 config = Config()
 
 
 def get_config() -> Config:
-    """获取配置实例"""
+    """Get configuration instance"""
     return config
 
 
 def reload_config():
-    """重新加载配置"""
+    """Reload configuration"""
     global config
     load_dotenv(override=True)
     config = Config()

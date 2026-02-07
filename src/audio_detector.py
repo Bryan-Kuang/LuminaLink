@@ -1,7 +1,7 @@
 """
-音频检测模块
+Audio Detection Module
 
-检测视频中的对话、静音片段，用于确定何时插入讲解
+Detects dialogue and silence segments in video to determine when to insert narration
 """
 
 import numpy as np
@@ -17,24 +17,24 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class AudioSegment:
-    """音频片段"""
-    start_time: float    # 开始时间（秒）
-    end_time: float      # 结束时间（秒）
-    has_speech: bool     # 是否包含语音
-    volume_db: float     # 平均音量（dB）
+    """Audio segment"""
+    start_time: float    # Start time (seconds)
+    end_time: float      # End time (seconds)
+    has_speech: bool     # Contains speech
+    volume_db: float     # Average volume (dB)
     
     @property
     def duration(self) -> float:
-        """片段时长"""
+        """Segment duration"""
         return self.end_time - self.start_time
 
 
 @dataclass
 class SilenceWindow:
-    """静音窗口 - 适合插入讲解的时间段"""
+    """Silence window - suitable time period for inserting narration"""
     start_time: float
     end_time: float
-    confidence: float  # 置信度 (0-1)
+    confidence: float  # Confidence (0-1)
     
     @property
     def duration(self) -> float:
@@ -42,7 +42,7 @@ class SilenceWindow:
 
 
 class AudioDetector:
-    """音频检测器"""
+    """Audio Detector"""
     
     def __init__(
         self,
@@ -51,12 +51,12 @@ class AudioDetector:
         min_narration_gap: float = 3.0
     ):
         """
-        初始化音频检测器
+        Initialize audio detector
         
         Args:
-            silence_threshold_db: 静音阈值（dB）
-            min_silence_duration: 最小静音时长（秒）
-            min_narration_gap: 讲解之间的最小间隔（秒）
+            silence_threshold_db: Silence threshold (dB)
+            min_silence_duration: Minimum silence duration (seconds)
+            min_narration_gap: Minimum gap between narrations (seconds)
         """
         self.silence_threshold_db = silence_threshold_db
         self.min_silence_duration = min_silence_duration
@@ -67,26 +67,26 @@ class AudioDetector:
     
     def load_audio_from_video(self, video_path: str) -> bool:
         """
-        从视频文件中提取音频
+        Extract audio from video file
         
         Args:
-            video_path: 视频文件路径
+            video_path: Video file path
         
         Returns:
-            是否成功加载
+            Whether loading was successful
         """
         try:
             from moviepy import VideoFileClip
             import librosa
             
-            logger.info(f"正在从视频提取音频: {video_path}")
+            logger.info(f"Extracting audio from video: {video_path}")
             
-            # 创建临时音频文件
+            # Create temporary audio file
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
                 tmp_path = tmp.name
             
             try:
-                # 提取音频
+                # Extract audio
                 video = VideoFileClip(video_path)
                 video.audio.write_audiofile(
                     tmp_path, 
@@ -95,31 +95,31 @@ class AudioDetector:
                 )
                 video.close()
                 
-                # 加载音频数据
+                # Load audio data
                 self._audio_data, self._sample_rate = librosa.load(
                     tmp_path, 
                     sr=self._sample_rate,
                     mono=True
                 )
                 
-                logger.info(f"音频加载成功，时长: {len(self._audio_data) / self._sample_rate:.2f}秒")
+                logger.info(f"Audio loaded successfully, duration: {len(self._audio_data) / self._sample_rate:.2f}s")
                 return True
                 
             finally:
-                # 清理临时文件
+                # Clean up temporary file
                 if os.path.exists(tmp_path):
                     os.remove(tmp_path)
                     
         except Exception as e:
-            logger.error(f"音频提取失败: {e}")
+            logger.error(f"Audio extraction failed: {e}")
             return False
     
     def load_audio_file(self, audio_path: str) -> bool:
         """
-        直接加载音频文件
+        Load audio file directly
         
         Args:
-            audio_path: 音频文件路径
+            audio_path: Audio file path
         """
         try:
             import librosa
@@ -132,7 +132,7 @@ class AudioDetector:
             return True
             
         except Exception as e:
-            logger.error(f"音频加载失败: {e}")
+            logger.error(f"Audio loading failed: {e}")
             return False
     
     def analyze_audio(
@@ -140,16 +140,16 @@ class AudioDetector:
         window_size: float = 0.5
     ) -> List[AudioSegment]:
         """
-        分析音频，识别语音和静音片段
+        Analyze audio to identify speech and silence segments
         
         Args:
-            window_size: 分析窗口大小（秒）
+            window_size: Analysis window size (seconds)
         
         Returns:
-            AudioSegment 列表
+            List of AudioSegment
         """
         if self._audio_data is None:
-            logger.error("音频数据未加载")
+            logger.error("Audio data not loaded")
             return []
         
         segments = []
@@ -162,10 +162,10 @@ class AudioDetector:
             if len(window) == 0:
                 continue
             
-            # 计算RMS能量
+            # Calculate RMS energy
             rms = np.sqrt(np.mean(window ** 2))
             
-            # 转换为dB
+            # Convert to dB
             if rms > 0:
                 volume_db = 20 * np.log10(rms)
             else:
@@ -175,7 +175,7 @@ class AudioDetector:
             end_time = min((i + samples_per_window) / self._sample_rate, 
                           total_samples / self._sample_rate)
             
-            # 判断是否有语音
+            # Determine if there is speech
             has_speech = volume_db > self.silence_threshold_db
             
             segments.append(AudioSegment(
@@ -185,7 +185,7 @@ class AudioDetector:
                 volume_db=volume_db
             ))
         
-        logger.info(f"音频分析完成，共 {len(segments)} 个片段")
+        logger.info(f"Audio analysis complete, {len(segments)} segments")
         return segments
     
     def find_silence_windows(
@@ -193,13 +193,13 @@ class AudioDetector:
         segments: Optional[List[AudioSegment]] = None
     ) -> List[SilenceWindow]:
         """
-        找出适合插入讲解的静音窗口
+        Find silence windows suitable for inserting narration
         
         Args:
-            segments: 音频片段列表，如果为 None 则先分析音频
+            segments: Audio segment list, analyzes audio if None
         
         Returns:
-            SilenceWindow 列表
+            List of SilenceWindow
         """
         if segments is None:
             segments = self.analyze_audio()
@@ -212,17 +212,17 @@ class AudioDetector:
         
         for segment in segments:
             if not segment.has_speech:
-                # 开始静音
+                # Start silence
                 if silence_start is None:
                     silence_start = segment.start_time
             else:
-                # 语音开始，结束静音
+                # Speech starts, end silence
                 if silence_start is not None:
                     silence_end = segment.start_time
                     duration = silence_end - silence_start
                     
                     if duration >= self.min_silence_duration:
-                        # 计算置信度（基于静音时长）
+                        # Calculate confidence (based on silence duration)
                         confidence = min(duration / 5.0, 1.0)
                         
                         windows.append(SilenceWindow(
@@ -233,7 +233,7 @@ class AudioDetector:
                     
                     silence_start = None
         
-        # 处理末尾的静音
+        # Handle trailing silence
         if silence_start is not None:
             silence_end = segments[-1].end_time
             duration = silence_end - silence_start
@@ -245,127 +245,147 @@ class AudioDetector:
                     confidence=min(duration / 5.0, 1.0)
                 ))
         
-        logger.info(f"找到 {len(windows)} 个静音窗口")
+        logger.info(f"Found {len(windows)} silence windows")
         return windows
     
     def get_narration_slots(
         self,
-        windows: Optional[List[SilenceWindow]] = None,
-        max_narration_duration: float = 10.0
+        silence_windows: Optional[List[SilenceWindow]] = None
     ) -> List[Tuple[float, float]]:
         """
-        获取讲解时间槽
-        
-        返回适合插入讲解的时间段，考虑讲解间隔和最大时长
+        Get narration time slots
         
         Args:
-            windows: 静音窗口列表
-            max_narration_duration: 最大讲解时长
+            silence_windows: Silence window list
         
         Returns:
-            (start_time, end_time) 元组列表
+            List of (start_time, end_time) tuples
         """
-        if windows is None:
-            windows = self.find_silence_windows()
+        if silence_windows is None:
+            silence_windows = self.find_silence_windows()
         
         slots = []
-        last_narration_end = 0.0
+        last_end = 0.0
         
-        for window in windows:
-            # 检查与上次讲解的间隔
-            if window.start_time < last_narration_end + self.min_narration_gap:
-                continue
-            
-            # 计算讲解时长
-            available_duration = window.duration
-            narration_duration = min(available_duration * 0.8, max_narration_duration)
-            
-            if narration_duration >= 1.0:  # 至少1秒
-                slot_start = window.start_time + 0.3  # 留一点缓冲
-                slot_end = slot_start + narration_duration
+        for window in silence_windows:
+            # Ensure minimum gap from last narration
+            if window.start_time - last_end >= self.min_narration_gap:
+                # Leave margin at start and end of silence window
+                margin = 0.3
+                start = window.start_time + margin
+                end = window.end_time - margin
                 
-                slots.append((slot_start, slot_end))
-                last_narration_end = slot_end
+                if end - start >= 1.0:  # At least 1 second
+                    slots.append((start, end))
+                    last_end = end
         
-        logger.info(f"生成 {len(slots)} 个讲解时间槽")
+        logger.info(f"Generated {len(slots)} narration slots")
         return slots
     
-    def is_silence_at(self, timestamp: float, window_size: float = 0.5) -> bool:
+    def is_silence_at(self, timestamp: float) -> bool:
         """
-        检查指定时间是否为静音
+        Check if specified timestamp is silence
         
         Args:
-            timestamp: 时间戳（秒）
-            window_size: 检测窗口大小
-        
-        Returns:
-            是否为静音
+            timestamp: Timestamp (seconds)
         """
         if self._audio_data is None:
-            return True
+            return False
         
-        start_sample = int(timestamp * self._sample_rate)
-        end_sample = int((timestamp + window_size) * self._sample_rate)
+        # Get audio samples around timestamp
+        sample_idx = int(timestamp * self._sample_rate)
+        window_size = int(0.5 * self._sample_rate)  # 0.5 second window
         
-        if start_sample >= len(self._audio_data):
-            return True
+        start_idx = max(0, sample_idx - window_size // 2)
+        end_idx = min(len(self._audio_data), sample_idx + window_size // 2)
         
-        window = self._audio_data[start_sample:end_sample]
+        window = self._audio_data[start_idx:end_idx]
         
         if len(window) == 0:
             return True
         
+        # Calculate volume
         rms = np.sqrt(np.mean(window ** 2))
         volume_db = 20 * np.log10(rms) if rms > 0 else -100
         
-        return volume_db <= self.silence_threshold_db
-    
-    def get_audio_duration(self) -> float:
-        """获取音频总时长"""
-        if self._audio_data is None:
-            return 0.0
-        return len(self._audio_data) / self._sample_rate
+        return volume_db < self.silence_threshold_db
 
 
 class RealtimeAudioDetector:
-    """实时音频检测器"""
+    """Realtime audio detector for live audio streams"""
     
-    def __init__(self, silence_threshold_db: float = -40.0):
+    def __init__(
+        self,
+        silence_threshold_db: float = -40.0,
+        buffer_duration: float = 2.0,
+        sample_rate: int = 22050
+    ):
+        """
+        Initialize realtime audio detector
+        
+        Args:
+            silence_threshold_db: Silence threshold (dB)
+            buffer_duration: Audio buffer duration (seconds)
+            sample_rate: Sample rate
+        """
         self.silence_threshold_db = silence_threshold_db
-        self._buffer: List[float] = []
-        self._buffer_duration: float = 1.0  # 1秒缓冲
+        self.buffer_duration = buffer_duration
+        self.sample_rate = sample_rate
+        
+        buffer_size = int(sample_rate * buffer_duration)
+        self._buffer = np.zeros(buffer_size, dtype=np.float32)
+        self._buffer_pos = 0
+        self._is_silence = True
     
-    def add_samples(self, samples: np.ndarray, sample_rate: int):
-        """添加音频样本"""
-        # 计算RMS
-        rms = np.sqrt(np.mean(samples ** 2))
+    def feed_audio(self, audio_chunk: np.ndarray):
+        """
+        Feed audio data to buffer
+        
+        Args:
+            audio_chunk: Audio data chunk
+        """
+        chunk_size = len(audio_chunk)
+        buffer_size = len(self._buffer)
+        
+        if chunk_size >= buffer_size:
+            # If chunk is larger than buffer, take last part
+            self._buffer = audio_chunk[-buffer_size:].copy()
+            self._buffer_pos = 0
+        else:
+            # Add to buffer, overwriting old data cyclically
+            end_pos = self._buffer_pos + chunk_size
+            
+            if end_pos <= buffer_size:
+                self._buffer[self._buffer_pos:end_pos] = audio_chunk
+            else:
+                first_part = buffer_size - self._buffer_pos
+                self._buffer[self._buffer_pos:] = audio_chunk[:first_part]
+                self._buffer[:end_pos - buffer_size] = audio_chunk[first_part:]
+            
+            self._buffer_pos = end_pos % buffer_size
+        
+        # Update silence state
+        self._update_silence_state()
+    
+    def _update_silence_state(self):
+        """Update silence state"""
+        # Calculate current volume
+        rms = np.sqrt(np.mean(self._buffer ** 2))
         volume_db = 20 * np.log10(rms) if rms > 0 else -100
         
-        self._buffer.append(volume_db)
-        
-        # 保持缓冲区大小
-        max_size = int(self._buffer_duration * sample_rate / len(samples))
-        if len(self._buffer) > max_size:
-            self._buffer = self._buffer[-max_size:]
+        self._is_silence = volume_db < self.silence_threshold_db
     
     def is_current_silence(self) -> bool:
-        """当前是否为静音"""
-        if not self._buffer:
-            return True
-        
-        avg_volume = np.mean(self._buffer[-10:])  # 最近10个窗口
-        return avg_volume <= self.silence_threshold_db
+        """Check if current audio is silence"""
+        return self._is_silence
     
-    def get_silence_duration(self) -> float:
-        """获取当前静音持续时间"""
-        if not self._buffer:
-            return 0.0
-        
-        silence_count = 0
-        for db in reversed(self._buffer):
-            if db <= self.silence_threshold_db:
-                silence_count += 1
-            else:
-                break
-        
-        return silence_count * (self._buffer_duration / len(self._buffer))
+    def get_current_volume_db(self) -> float:
+        """Get current volume (dB)"""
+        rms = np.sqrt(np.mean(self._buffer ** 2))
+        return 20 * np.log10(rms) if rms > 0 else -100
+    
+    def reset(self):
+        """Reset detector"""
+        self._buffer.fill(0)
+        self._buffer_pos = 0
+        self._is_silence = True

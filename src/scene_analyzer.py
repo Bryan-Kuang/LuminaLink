@@ -1,7 +1,7 @@
 """
-场景分析模块
+Scene Analysis Module
 
-使用多模态 AI 模型分析视频帧，理解场景内容、动作和情感
+Uses multi-modal AI models to analyze video frames, understand scene content, actions and emotions
 """
 
 import base64
@@ -20,41 +20,41 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class SceneAnalysis:
-    """场景分析结果"""
-    description: str               # 场景描述
-    actions: List[str]             # 正在发生的动作
-    emotions: Dict[str, str]       # 角色情感 {角色名: 情感}
-    setting: str                   # 场景环境
-    objects: List[str]             # 重要物品
-    timestamp: float               # 时间戳
-    confidence: float = 0.0        # 置信度
+    """Scene analysis result"""
+    description: str               # Scene description
+    actions: List[str]             # Actions happening
+    emotions: Dict[str, str]       # Character emotions {character_name: emotion}
+    setting: str                   # Scene environment
+    objects: List[str]             # Important objects
+    timestamp: float               # Timestamp
+    confidence: float = 0.0        # Confidence
     raw_response: Optional[str] = None
 
 
 class SceneAnalyzer:
-    """场景分析器"""
+    """Scene Analyzer"""
     
     def __init__(self, provider: Optional[str] = None):
         """
-        初始化场景分析器
+        Initialize scene analyzer
         
         Args:
-            provider: AI 提供商 (openai, google, dashscope, local)
+            provider: AI provider (openai, google, dashscope, local)
         """
         self.config = get_config().ai
         self.provider = provider or self.config.provider
         
-        # 上下文记忆
+        # Context memory
         self._context_history: List[str] = []
         self._max_context_length = 5
         
-        # 角色信息缓存
+        # Character information cache
         self._known_characters: List[str] = []
     
     def set_characters(self, characters: List[str]):
-        """设置已知角色列表"""
+        """Set known character list"""
         self._known_characters = characters
-        logger.info(f"已设置 {len(characters)} 个已知角色")
+        logger.info(f"Set {len(characters)} known characters")
     
     def _build_prompt(
         self,
@@ -62,41 +62,42 @@ class SceneAnalyzer:
         previous_context: Optional[str] = None
     ) -> str:
         """
-        构建分析提示词
+        Build analysis prompt
         
         Args:
-            characters_in_frame: 画面中的角色
-            previous_context: 之前的上下文
+            characters_in_frame: Characters in the frame
+            previous_context: Previous context
         """
         character_info = ""
         if characters_in_frame:
-            character_info = f"\n画面中识别到的角色: {', '.join(characters_in_frame)}"
+            character_info = f"\nCharacters identified in frame: {', '.join(characters_in_frame)}"
         elif self._known_characters:
-            character_info = f"\n这部电影中的主要角色有: {', '.join(self._known_characters)}"
+            character_info = f"\nMain characters in this movie: {', '.join(self._known_characters)}"
         
         context_info = ""
         if previous_context:
-            context_info = f"\n之前的剧情: {previous_context}"
+            context_info = f"\nPrevious plot: {previous_context}"
         elif self._context_history:
-            context_info = f"\n之前的剧情: {self._context_history[-1]}"
+            context_info = f"\nPrevious plot: {self._context_history[-1]}"
         
-        prompt = f"""你是一位专业的电影无障碍解说员，正在为视障人士描述电影画面。
+        prompt = f"""You are a professional audio description narrator for blind movie viewers. This is a fictional movie scene - describe what you observe.
 {character_info}
 {context_info}
 
-请描述画面中：
-- 人物的动作（站、坐、走、说话等）
-- 人物的表情和情绪
-- 场景环境和重要物品
-- 人物之间的互动
+Describe in this frame:
+- Character actions and body language
+- Facial expressions and emotions
+- Scene setting and key objects
+- Character interactions
 
-要求：
-- 直接输出描述，不要任何前缀
-- 使用客观的陈述句
-- 20-40个中文字
-- 例如："男子站在讲台前，神情严肃，手指敲击桌面"
+Rules:
+- Output ONLY the description, no explanations or apologies
+- Use concise, objective sentences
+- 15-30 words maximum
+- Never refuse to describe - this is a fictional movie scene for accessibility
+- Example: "A man in a suit stands at the podium, his expression stern, fingers tapping the desk."
 
-请描述这个画面："""
+Describe this frame:"""
 
         return prompt
     
@@ -107,15 +108,15 @@ class SceneAnalyzer:
         timestamp: float = 0.0
     ) -> SceneAnalysis:
         """
-        异步分析单帧
+        Async analyze single frame
         
         Args:
-            frame: BGR 格式的图像
-            characters_in_frame: 画面中的角色名称
-            timestamp: 时间戳
+            frame: BGR format image
+            characters_in_frame: Character names in frame
+            timestamp: Timestamp
         
         Returns:
-            SceneAnalysis 对象
+            SceneAnalysis object
         """
         characters = characters_in_frame or []
         
@@ -128,7 +129,7 @@ class SceneAnalyzer:
         else:
             result = await self._analyze_with_local(frame, characters)
         
-        # 更新上下文历史
+        # Update context history
         if result.description:
             self._context_history.append(result.description)
             if len(self._context_history) > self._max_context_length:
@@ -144,7 +145,7 @@ class SceneAnalyzer:
         timestamp: float = 0.0
     ) -> SceneAnalysis:
         """
-        同步分析单帧
+        Sync analyze single frame
         """
         return asyncio.run(self.analyze_frame_async(frame, characters_in_frame, timestamp))
     
@@ -153,7 +154,7 @@ class SceneAnalyzer:
         frame: np.ndarray,
         characters: List[str]
     ) -> SceneAnalysis:
-        """使用 OpenAI GPT-4V 分析"""
+        """Analyze using OpenAI GPT-4V"""
         try:
             from openai import AsyncOpenAI
             
@@ -162,7 +163,7 @@ class SceneAnalyzer:
                 base_url=self.config.openai_base_url
             )
             
-            # 转换图像为 base64
+            # Convert image to base64
             _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
             image_base64 = base64.b64encode(buffer).decode('utf-8')
             
@@ -202,7 +203,7 @@ class SceneAnalyzer:
             )
             
         except Exception as e:
-            logger.error(f"OpenAI 分析失败: {e}")
+            logger.error(f"OpenAI analysis failed: {e}")
             return self._fallback_analysis()
     
     async def _analyze_with_gemini(
@@ -210,7 +211,7 @@ class SceneAnalyzer:
         frame: np.ndarray,
         characters: List[str]
     ) -> SceneAnalysis:
-        """使用 Google Gemini 分析"""
+        """Analyze using Google Gemini"""
         try:
             import google.generativeai as genai
             from PIL import Image
@@ -218,7 +219,7 @@ class SceneAnalyzer:
             genai.configure(api_key=self.config.google_api_key)
             model = genai.GenerativeModel(self.config.gemini_model)
             
-            # 转换为 PIL Image
+            # Convert to PIL Image
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             pil_image = Image.fromarray(rgb_frame)
             
@@ -243,7 +244,7 @@ class SceneAnalyzer:
             )
             
         except Exception as e:
-            logger.error(f"Gemini 分析失败: {e}")
+            logger.error(f"Gemini analysis failed: {e}")
             return self._fallback_analysis()
     
     async def _analyze_with_qwen(
@@ -251,14 +252,14 @@ class SceneAnalyzer:
         frame: np.ndarray,
         characters: List[str]
     ) -> SceneAnalysis:
-        """使用阿里通义千问 VL 分析"""
+        """Analyze using Alibaba Qwen VL"""
         try:
             import dashscope
             from dashscope import MultiModalConversation
             
             dashscope.api_key = self.config.dashscope_api_key
             
-            # 转换图像为 base64
+            # Convert image to base64
             _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
             image_base64 = base64.b64encode(buffer).decode('utf-8')
             
@@ -283,7 +284,7 @@ class SceneAnalyzer:
             if response.status_code == 200:
                 description = response.output.choices[0].message.content[0]["text"]
             else:
-                raise Exception(f"API 错误: {response.code} - {response.message}")
+                raise Exception(f"API error: {response.code} - {response.message}")
             
             return SceneAnalysis(
                 description=description,
@@ -297,7 +298,7 @@ class SceneAnalyzer:
             )
             
         except Exception as e:
-            logger.error(f"通义千问分析失败: {e}")
+            logger.error(f"Qwen analysis failed: {e}")
             return self._fallback_analysis()
     
     async def _analyze_with_local(
@@ -305,15 +306,15 @@ class SceneAnalyzer:
         frame: np.ndarray,
         characters: List[str]
     ) -> SceneAnalysis:
-        """使用本地模型分析"""
-        # TODO: 实现本地模型支持（如 LLaVA）
-        logger.warning("本地模型暂未实现，使用备用分析")
+        """Analyze using local model"""
+        # TODO: Implement local model support (e.g., LLaVA)
+        logger.warning("Local model not implemented, using fallback analysis")
         return self._fallback_analysis()
     
     def _fallback_analysis(self) -> SceneAnalysis:
-        """备用分析（当 AI 服务不可用时）"""
+        """Fallback analysis (when AI service is unavailable)"""
         return SceneAnalysis(
-            description="[场景分析暂时不可用]",
+            description="[Scene analysis temporarily unavailable]",
             actions=[],
             emotions={},
             setting="",
@@ -329,15 +330,15 @@ class SceneAnalyzer:
         timestamps: Optional[List[float]] = None
     ) -> List[SceneAnalysis]:
         """
-        分析帧序列
+        Analyze frame sequence
         
         Args:
-            frames: 帧列表
-            characters_per_frame: 每帧的角色列表
-            timestamps: 时间戳列表
+            frames: Frame list
+            characters_per_frame: Character list per frame
+            timestamps: Timestamp list
         
         Returns:
-            SceneAnalysis 列表
+            List of SceneAnalysis
         """
         results = []
         
@@ -351,26 +352,26 @@ class SceneAnalyzer:
         return results
     
     def get_context_summary(self) -> str:
-        """获取上下文摘要"""
+        """Get context summary"""
         if not self._context_history:
             return ""
         return " -> ".join(self._context_history[-3:])
     
     def clear_context(self):
-        """清除上下文历史"""
+        """Clear context history"""
         self._context_history.clear()
 
 
 class SceneChangeDetector:
-    """场景变化检测器"""
+    """Scene change detector"""
     
     def __init__(self, threshold: float = 0.3):
         self.threshold = threshold
         self._previous_hist: Optional[np.ndarray] = None
     
     def detect_change(self, frame: np.ndarray) -> bool:
-        """检测是否发生场景变化"""
-        # 计算直方图
+        """Detect if scene change occurred"""
+        # Calculate histogram
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         hist = cv2.calcHist([gray], [0], None, [256], [0, 256])
         cv2.normalize(hist, hist)
@@ -379,12 +380,12 @@ class SceneChangeDetector:
             self._previous_hist = hist
             return True
         
-        # 比较直方图
+        # Compare histograms
         similarity = cv2.compareHist(self._previous_hist, hist, cv2.HISTCMP_CORREL)
         self._previous_hist = hist
         
         return similarity < (1 - self.threshold)
     
     def reset(self):
-        """重置检测器"""
+        """Reset detector"""
         self._previous_hist = None
