@@ -1,0 +1,27 @@
+{
+  "characters": [
+    {
+      "id": "char_1",
+      "name": "主角",
+      "aliases": [
+        "男主",
+        "小明"
+      ],
+      "description": "电影的主人公",
+      "appearance_count": 0,
+      "metadata": {}
+    },
+    {
+      "id": "char_2",
+      "name": "女主角",
+      "aliases": [
+        "女主",
+        "小红"
+      ],
+      "description": "女主人公",
+      "appearance_count": 0,
+      "metadata": {}
+    }
+  ],
+  "updated_at": "2026-01-28T11:58:47.097261"
+}
