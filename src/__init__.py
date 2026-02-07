@@ -1,7 +1,7 @@
 """
-LuminaLink - 盲人电影智能讲解系统
+LuminaLink - AI Movie Narration System
 
-专为视障人士设计的实时视频讲解系统
+A real-time video narration system designed for visually impaired users.
 """
 
 __version__ = "1.0.0"

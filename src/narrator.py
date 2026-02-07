@@ -148,9 +148,7 @@ class Narrator:
         refusal_keywords = [
             # English
             "sorry", "cannot", "can't", "unable", "i'm not able", "i cannot",
-            "i can't", "i am unable", "i'm unable", "apologize", "apologies",
-            # Chinese
-            "对不起", "抱歉", "无法", "不能", "我无法", "我不能"
+            "i can't", "i am unable", "i'm unable", "apologize", "apologies"
         ]
         if any(keyword in text.lower() for keyword in refusal_keywords):
             logger.debug(f"Skipping refusal response: {text[:30]}...")

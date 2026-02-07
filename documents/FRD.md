@@ -1,20 +1,20 @@
-# LuminaLink摄像头实时解说系统 - 功能需求文档 (FRD)
+# LuminaLink Camera Real-time Narration System - Functional Requirements Document (FRD)
 
-**版本**: 1.0
-**日期**: 2026-02-06
-**状态**: 草案
-
----
-
-## 1. 文档概述
-
-本文档详细描述LuminaLink摄像头实时解说系统的功能需求、技术架构、接口设计和实现细节，作为开发团队的实施指南。
+**Version**: 1.0
+**Date**: 2026-02-06
+**Status**: Draft
 
 ---
 
-## 2. 系统架构
+## 1. Document Overview
 
-### 2.1 整体架构图
+This document details the functional requirements, technical architecture, interface design, and implementation details of the LuminaLink Camera Real-time Narration System, serving as an implementation guide for the development team.
+
+---
+
+## 2. System Architecture
+
+### 2.1 Overall Architecture Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -54,29 +54,30 @@
                          └─────────────┘
 ```
 
-### 2.2 技术栈
+### 2.2 Tech Stack
 
-| 层次 | 技术 | 版本 |
-|------|------|------|
-| **GUI框架** | Tkinter | Python标准库 |
-| **视频处理** | OpenCV | ≥4.5.0 |
-| **AI视觉** | OpenAI GPT-4 Vision | 最新API |
-| **TTS引擎** | EdgeTTS | ≥6.1.0 |
-| **音频处理** | sounddevice, librosa | ≥0.4.6, ≥0.10.0 |
-| **并发** | threading, asyncio | Python标准库 |
-| **数据处理** | NumPy, Pillow | ≥1.21.0, ≥10.0.0 |
+| Layer                | Technology           | Version                 |
+| -------------------- | -------------------- | ----------------------- |
+| **GUI Framework**    | Tkinter              | Python Standard Library |
+| **Video Processing** | OpenCV               | ≥4.5.0                  |
+| **AI Vision**        | OpenAI GPT-4 Vision  | Latest API              |
+| **TTS Engine**       | EdgeTTS              | ≥6.1.0                  |
+| **Audio Processing** | sounddevice, librosa | ≥0.4.6, ≥0.10.0         |
+| **Concurrency**      | threading, asyncio   | Python Standard Library |
+| **Data Processing**  | NumPy, Pillow        | ≥1.21.0, ≥10.0.0        |
 
 ---
 
-## 3. 核心模块详细设计
+## 3. Detailed Module Design
 
-### 3.1 VideoFrame类型定义
+### 3.1 VideoFrame Type Definition
 
-**文件**: `src/luminalink/types.py`
+**File**: `src/luminalink/types.py`
 
-**职责**: 统一视频帧数据结构，供CameraInput和VideoProcessor共用。
+**Responsibility**: Unify video frame data structures for shared use by CameraInput and VideoProcessor.
 
-**类定义**:
+**Class Definition**:
+
 ```python
 from dataclasses import dataclass
 import numpy as np
@@ -100,20 +101,22 @@ class VideoFrame:
         return self.image_bgr
 ```
 
-**关键点**:
-- `pts_ms`: 绝对时间戳（毫秒），摄像头模式使用系统时钟，文件模式使用视频PTS
-- `frame_index`: 帧序号，从0开始递增
-- `image_bgr`: OpenCV标准BGR格式图像（H×W×3 NumPy数组）
+**Key Points**:
+
+- `pts_ms`: Absolute timestamp (milliseconds). Camera mode uses the system clock; file mode uses video PTS.
+- `frame_index`: Frame sequence number, incrementing from 0.
+- `image_bgr`: OpenCV standard BGR format image (H×W×3 NumPy array).
 
 ---
 
-### 3.2 CameraInput（摄像头输入）
+### 3.2 CameraInput (Camera Input)
 
-**文件**: `src/luminalink/input/camera_input.py` (已存在，需集成)
+**File**: `src/luminalink/input/camera_input.py` (Existing, integration required)
 
-**职责**: 从设备摄像头捕获实时视频流。
+**Responsibility**: Capture real-time video stream from the device camera.
 
-**接口**:
+**Interface**:
+
 ```python
 class CameraInput:
     def __init__(self, camera_index: int = 0,
@@ -129,25 +132,28 @@ class CameraInput:
         """Release camera resources"""
 ```
 
-**实现细节**:
-- 使用`cv2.VideoCapture(camera_index)`打开摄像头
-- 设置分辨率和FPS：`cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)`
-- 时间戳使用系统时钟：`pts_ms = int((time.time() - start_time) * 1000)`
-- 迭代器模式：`while True: ok, frame = cap.read()`
+**Implementation Details**:
 
-**错误处理**:
-- 摄像头打开失败：抛出`ValueError`，GUI显示错误对话框
-- 读帧失败：停止迭代器，触发`StopIteration`
+- Use `cv2.VideoCapture(camera_index)` to open the camera.
+- Set resolution and FPS: `cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)`.
+- Timestamp uses the system clock: `pts_ms = int((time.time() - start_time) * 1000)`.
+- Iterator pattern: `while True: ok, frame = cap.read()`.
+
+**Error Handling**:
+
+- Camera open failure: Raise `ValueError`, GUI displays error dialog.
+- Frame read failure: Stop the iterator, triggering `StopIteration`.
 
 ---
 
-### 3.3 AudioInputStream（音频输入）
+### 3.3 AudioInputStream (Audio Input)
 
-**文件**: `src/audio_input.py` (需新建)
+**File**: `src/audio_input.py` (Creation required)
 
-**职责**: 从麦克风捕获音频流，喂给音频检测器。
+**Responsibility**: Capture audio stream from the microphone and feed it to the audio detector.
 
-**类定义**:
+**Class Definition**:
+
 ```python
 import sounddevice as sd
 import numpy as np
@@ -194,28 +200,32 @@ class AudioInputStream:
         return self._running
 ```
 
-**依赖**:
-- `sounddevice>=0.4.6`：跨平台音频捕获库
-- `RealtimeAudioDetector`：已存在于`src/audio_detector.py`
+**Dependencies**:
 
-**参数说明**:
-- `sample_rate=22050`: 与RealtimeAudioDetector默认值一致
-- `blocksize=512`: 约23ms延迟（512/22050≈0.023s）
-- `channels=1`: 单声道，降低处理开销
+- `sounddevice>=0.4.6`: Cross-platform audio capture library.
+- `RealtimeAudioDetector`: Existing in `src/audio_detector.py`.
 
-**线程安全**:
-- sounddevice内部使用独立线程调用callback
-- callback中直接调用`detector.feed_audio()`是线程安全的
+**Parameter Description**:
+
+- `sample_rate=22050`: Consistent with the default value of RealtimeAudioDetector.
+- `blocksize=512`: Approx 23ms latency (512/22050≈0.023s).
+- `channels=1`: Mono, reducing processing overhead.
+
+**Thread Safety**:
+
+- sounddevice internally uses a standalone thread to call the callback.
+- Directly calling `detector.feed_audio()` in the callback is thread-safe.
 
 ---
 
-### 3.4 CameraRealtimeController（摄像头实时控制器）
+### 3.4 CameraRealtimeController (Camera Real-time Controller)
 
-**文件**: `src/camera_controller.py` (需新建)
+**File**: `src/camera_controller.py` (Creation required)
 
-**职责**: 编排摄像头输入、音频输入、场景分析、解说生成的完整流程。
+**Responsibility**: Orchestrates the complete flow of camera input, audio input, scene analysis, and narration generation.
 
-**类定义**:
+**Class Definition**:
+
 ```python
 class CameraRealtimeController:
     """Orchestrates real-time camera narration pipeline"""
@@ -300,36 +310,37 @@ class CameraRealtimeController:
         self.state.is_playing = False
         self._notify_status("Stopped")
 
-    # Worker threads (详见下节)
+    # Worker threads (Details in next section)
     def _camera_worker(self): ...
     def _analysis_worker(self): ...
     def _narration_worker(self): ...
 ```
 
-**线程模型**:
+**Threading Model**:
 
-| 线程 | 职责 | 输入 | 输出 |
-|------|------|------|------|
-| **Main (GUI)** | Tkinter事件循环 | 用户操作 | UI更新 |
-| **CameraThread** | 捕获摄像头帧 | CameraInput.frames() | frame_queue |
-| **AudioThread** | 捕获麦克风音频 | sounddevice callback | AudioDetector |
-| **AnalysisThread** | 场景分析 | analysis_queue | narration_queue |
-| **NarrationThread** | TTS生成和播放 | narration_queue | 扬声器输出 |
+| Thread              | Responsibility              | Input                | Output          |
+| ------------------- | --------------------------- | -------------------- | --------------- |
+| **Main (GUI)**      | Tkinter event loop          | User actions         | UI updates      |
+| **CameraThread**    | Capture camera frames       | CameraInput.frames() | frame_queue     |
+| **AudioThread**     | Capture microphone audio    | sounddevice callback | AudioDetector   |
+| **AnalysisThread**  | Scene analysis              | analysis_queue       | narration_queue |
+| **NarrationThread** | TTS generation and playback | narration_queue      | Speaker output  |
 
-**队列通信**:
-- `_frame_queue`: CameraThread → GUI显示
+**Queue Communication**:
+
+- `_frame_queue`: CameraThread → GUI display
 - `_analysis_queue`: CameraThread → AnalysisThread
 - `_narration_queue`: AnalysisThread → NarrationThread
 
 ---
 
-#### 3.4.1 Camera Worker线程
+#### 3.4.1 Camera Worker Thread
 
 ```python
 def _camera_worker(self):
     """Capture frames from camera"""
     last_analysis_time = 0
-    analysis_interval = self.config.video.keyframe_interval  # 默认1.0秒
+    analysis_interval = self.config.video.keyframe_interval  # Default 1.0 second
 
     for video_frame in self.camera_input.frames():
         if self._stop_event.is_set():
@@ -355,14 +366,15 @@ def _camera_worker(self):
                 logger.warning("Analysis queue full, skipping frame")
 ```
 
-**关键点**:
-- **帧率控制**: 捕获30 FPS，但只发送1-2 FPS到分析队列
-- **非阻塞**: GUI回调和队列都使用非阻塞操作，避免卡顿
-- **暂停支持**: `_pause_event.wait()`阻塞线程直到恢复
+**Key Points**:
+
+- **Frame Rate Control**: Capture at 30 FPS, but only send 1-2 FPS to the analysis queue.
+- **Non-blocking**: Both GUI callbacks and queues use non-blocking operations to avoid UI lag.
+- **Pause Support**: `_pause_event.wait()` blocks the thread until resumed.
 
 ---
 
-#### 3.4.2 Analysis Worker线程
+#### 3.4.2 Analysis Worker Thread
 
 ```python
 def _analysis_worker(self):
@@ -416,15 +428,16 @@ def _analysis_worker(self):
             # Continue processing next frame
 ```
 
-**关键逻辑**:
-1. **间隔控制**: `narrator.should_narrate()`检查距上次解说是否>=5秒
-2. **对话检测**: `audio_detector.is_current_silence()`检查当前是否静音
-3. **异步AI调用**: `analyze_frame_async()`使用asyncio避免阻塞
-4. **错误处理**: 捕获异常，记录日志，继续处理下一帧
+**Key Logic**:
+
+1. **Interval Control**: `narrator.should_narrate()` checks if the time since the last narration is >= 5 seconds.
+2. **Dialogue Detection**: `audio_detector.is_current_silence()` checks if it's currently silent.
+3. **Async AI Call**: `analyze_frame_async()` uses asyncio to avoid blocking.
+4. **Error Handling**: Catch exceptions, log errors, and continue processing the next frame.
 
 ---
 
-#### 3.4.3 Narration Worker线程
+#### 3.4.3 Narration Worker Thread
 
 ```python
 def _narration_worker(self):
@@ -456,10 +469,11 @@ def _narration_worker(self):
             logger.error(f"Narration playback error: {e}")
 ```
 
-**关键点**:
-- **TTS缓存**: `tts_manager.synthesize()`内部缓存相同文本的音频
-- **阻塞播放**: `audio_player.play()`阻塞直到播放完成
-- **状态更新**: `narrator.record_narration()`记录时间戳，用于间隔控制
+**Key Points**:
+
+- **TTS Caching**: `tts_manager.synthesize()` internally caches audio for the same text.
+- **Blocking Playback**: `audio_player.play()` blocks until playback is complete.
+- **Status Update**: `narrator.record_narration()` records the timestamp for interval control.
 
 ---
 
@@ -470,6 +484,7 @@ def _narration_worker(self):
 **职责**: 提供用户界面，显示视频、控制按钮、状态信息。
 
 **类结构**:
+
 ```python
 import tkinter as tk
 from tkinter import ttk
@@ -678,18 +693,20 @@ class CameraApp:
         self.root.mainloop()
 ```
 
-**线程安全关键**:
-- ✅ **使用`root.after()`**: 所有UI更新必须在主线程执行
-- ✅ **回调函数**: 工作线程调用回调，回调内部使用`after()`转发到主线程
-- ❌ **直接操作**: 绝不在工作线程直接调用Tkinter方法
+**Thread Safety Keys**:
+
+- ✅ **Use `root.after()`**: All UI updates must be executed in the main thread.
+- ✅ **Callback Functions**: Worker threads call callbacks, which use `after()` internally to forward to the main thread.
+- ❌ **Direct Operations**: Never call Tkinter methods directly from worker threads.
 
 ---
 
-### 3.6 主程序入口修改
+### 3.6 Main Program Entry Update
 
-**文件**: `src/main.py` (需修改)
+**File**: `src/main.py` (requires modification)
 
-**修改内容**:
+**Updates**:
+
 ```python
 import click
 
@@ -705,7 +722,7 @@ def cli():
 @click.option("--output", "-o", type=str, help="Output subtitle file (SRT)")
 def process(video, characters, preview, output):
     """Process video file (existing functionality)"""
-    # 现有的 LuminaLink 类逻辑
+    # Existing LuminaLink class logic
     app = LuminaLink(
         video_path=video,
         characters_config=characters,
@@ -731,132 +748,136 @@ if __name__ == "__main__":
     cli()
 ```
 
-**向后兼容**:
-- 旧命令仍然工作：`python -m src.main process --video movie.mp4`
-- 新命令启动GUI：`python -m src.main camera`
-- 简化命令（未来）：`python -m src.main camera` 可以缩写为 `luminalink camera`
+**Backward Compatibility**:
+
+- Old command still works: `python -m src.main process --video movie.mp4`
+- New command starts GUI: `python -m src.main camera`
+- Simplified command (future): `python -m src.main camera` can be aliased to `luminalink camera`
 
 ---
 
-## 4. 数据流详解
+## 4. Data Flow Details
 
-### 4.1 正常流程
-
-```
-1. 用户点击"Start"
-   → GUI调用controller.start()
-
-2. CameraThread启动
-   → 从摄像头读取帧（30 FPS）
-   → 发送到GUI显示（30 FPS）
-   → 发送到分析队列（1-2 FPS）
-
-3. AudioThread启动
-   → 从麦克风读取音频（22050 Hz）
-   → 喂给RealtimeAudioDetector
-   → 更新静音状态
-
-4. AnalysisThread处理帧
-   → 检查解说间隔（>=5秒）
-   → 检查静音状态（is_current_silence）
-   → 识别角色（可选）
-   → 调用GPT-4V分析场景
-   → 生成解说文本
-   → 放入解说队列
-
-5. NarrationThread播放
-   → 从队列取解说
-   → 调用EdgeTTS生成音频
-   → 播放音频
-   → 通知GUI显示字幕
-
-6. GUI更新
-   → 显示视频帧
-   → 显示字幕叠加
-   → 更新状态栏
-   → 记录日志
-```
-
-### 4.2 暂停流程
+### 4.1 Normal Flow
 
 ```
-1. 用户按空格或点击"Pause"
-   → GUI调用controller.pause()
+1. User clicks "Start"
+   → GUI calls controller.start()
 
-2. Controller设置暂停事件
+2. CameraThread starts
+   → Reads frames from camera (30 FPS)
+   → Sends to GUI for display (30 FPS)
+   → Sends to analysis queue (1-2 FPS)
+
+3. AudioThread starts
+   → Reads audio from microphone (22050 Hz)
+   → Feeds to RealtimeAudioDetector
+   → Updates silence state
+
+4. AnalysisThread processes frames
+   → Checks narration interval (>=5 seconds)
+   → Checks silence status (is_current_silence)
+   → Recognizes characters (optional)
+   → Calls GPT-4V to analyze the scene
+   → Generates narration text
+   → Places it in narration queue
+
+5. NarrationThread plays
+   → Pushes narration from queue
+   → Calls EdgeTTS to generate audio
+   → Plays audio
+   → Notifies GUI to display subtitles
+
+6. GUI Updates
+   → Displays video frames
+   → Displays subtitle overlays
+   → Updates status bar
+   → Records logs
+```
+
+### 4.2 Pause Flow
+
+```
+1. User presses space or clicks "Pause"
+   → GUI calls controller.pause()
+
+2. Controller sets pause event
    → _pause_event.clear()
 
-3. 所有工作线程暂停
-   → CameraThread: _pause_event.wait() 阻塞
-   → AnalysisThread: _pause_event.wait() 阻塞
-   → NarrationThread: _pause_event.wait() 阻塞
+3. All worker threads pause
+   → CameraThread: _pause_event.wait() blocked
+   → AnalysisThread: _pause_event.wait() blocked
+   → NarrationThread: _pause_event.wait() blocked
 
-4. GUI更新
-   → 按钮文本变为"Resume"
-   → 状态变为"Paused"
+4. GUI Updates
+   → Button text changes to "Resume"
+   → Status changes to "Paused"
 
-5. 用户恢复
-   → GUI调用controller.resume()
+5. User resumes
+   → GUI calls controller.resume()
    → _pause_event.set()
-   → 所有线程恢复运行
+   → All threads resume running
 ```
 
-### 4.3 停止流程
+### 4.3 Stop Flow
 
 ```
-1. 用户按ESC或点击"Stop"
-   → GUI调用controller.stop()
+1. User presses ESC or clicks "Stop"
+   → GUI calls controller.stop()
 
-2. Controller设置停止事件
+2. Controller sets stop event
    → _stop_event.set()
 
-3. 所有工作线程退出循环
+3. All worker threads exit loops
    → while not self._stop_event.is_set(): break
 
-4. 等待线程结束
+4. Wait for threads to end
    → thread.join(timeout=2.0)
 
-5. 释放资源
+5. Release resources
    → camera_input.close()
    → audio_stream.stop()
 
-6. GUI更新
-   → 按钮状态重置
-   → 状态变为"Stopped"
+6. GUI Updates
+   → Button states reset
+   → Status changes to "Stopped"
 ```
 
 ---
 
-## 5. 接口定义
+## 5. Interface Definitions
 
-### 5.1 CameraRealtimeController接口
+### 5.1 CameraRealtimeController Interface
 
-| 方法 | 参数 | 返回值 | 说明 |
-|------|------|--------|------|
-| `__init__` | camera_index, characters_config | - | 初始化控制器 |
-| `start()` | - | None | 启动所有线程 |
-| `pause()` | - | None | 暂停解说 |
-| `resume()` | - | None | 恢复解说 |
-| `stop()` | - | None | 停止并释放资源 |
-| `set_on_frame_callback` | callback: Callable | None | 设置帧回调 |
-| `set_on_narration_callback` | callback: Callable | None | 设置解说回调 |
-| `set_on_status_callback` | callback: Callable | None | 设置状态回调 |
+| Method                      | Parameters                      | Return | Description                  |
+| --------------------------- | ------------------------------- | ------ | ---------------------------- |
+| `__init__`                  | camera_index, characters_config | -      | Initializes the controller   |
+| `start()`                   | -                               | None   | Starts all threads           |
+| `pause()`                   | -                               | None   | Pauses narration             |
+| `resume()`                  | -                               | None   | Resumes narration            |
+| `stop()`                    | -                               | None   | Stops and releases resources |
+| `set_on_frame_callback`     | callback: Callable              | None   | Sets frame callback          |
+| `set_on_narration_callback` | callback: Callable              | None   | Sets narration callback      |
+| `set_on_status_callback`    | callback: Callable              | None   | Sets status callback         |
 
-### 5.2 回调接口
+### 5.2 Callback Interfaces
 
-**帧回调**:
+**Frame Callback**:
+
 ```python
 def on_frame(frame_bgr: np.ndarray) -> None:
     """Called when new frame is available (30 FPS)"""
 ```
 
-**解说回调**:
+**Narration Callback**:
+
 ```python
 def on_narration(text: str) -> None:
     """Called when narration is generated"""
 ```
 
-**状态回调**:
+**Status Callback**:
+
 ```python
 def on_status(status: str) -> None:
     """Called when state changes (Running/Paused/Stopped)"""
@@ -864,13 +885,14 @@ def on_status(status: str) -> None:
 
 ---
 
-## 6. 配置与设置
+## 6. Configuration and Settings
 
-### 6.1 用户设置文件
+### 6.1 User Settings File
 
-**位置**: `~/.luminalink/settings.json`
+**Location**: `~/.luminalink/settings.json`
 
-**格式**:
+**Format**:
+
 ```json
 {
   "camera_index": 0,
@@ -886,7 +908,8 @@ def on_status(status: str) -> None:
 }
 ```
 
-**加载逻辑**:
+**Loading Logic**:
+
 ```python
 import json
 from pathlib import Path
@@ -900,7 +923,8 @@ else:
     settings = default_settings()
 ```
 
-**保存逻辑**:
+**Saving Logic**:
+
 ```python
 def save_settings(settings: dict):
     settings_file = Path.home() / ".luminalink" / "settings.json"
@@ -911,17 +935,18 @@ def save_settings(settings: dict):
 
 ---
 
-## 7. 错误处理
+## 7. Error Handling
 
-### 7.1 摄像头错误
+### 7.1 Camera Errors
 
-| 错误 | 处理方式 |
-|------|---------|
-| 摄像头打开失败 | 显示错误对话框，列出可用设备，提供文件模式降级 |
-| 摄像头断开 | 显示错误提示，停止捕获，支持重新连接 |
-| 读帧失败 | 记录警告日志，跳过该帧，继续处理 |
+| Error                | Handling Method                                                       |
+| -------------------- | --------------------------------------------------------------------- |
+| Camera fails to open | Show error dialog, list available devices, provide file mode fallback |
+| Camera disconnected  | Show error notification, stop capture, support reconnection           |
+| Frame read failure   | Log warning, skip frame, continue processing                          |
 
-**示例代码**:
+**Example Code**:
+
 ```python
 try:
     self.camera_input.open()
@@ -937,29 +962,29 @@ except ValueError as e:
     return
 ```
 
-### 7.2 API错误
+### 7.2 API Errors
 
-| 错误 | 处理方式 |
-|------|---------|
-| OpenAI API失败 | 记录错误，跳过该帧，显示警告提示 |
-| API限流 | 降低分析频率，显示限流提示 |
-| 网络中断 | 显示网络错误，提供重试按钮 |
+| Error                | Handling Method                                         |
+| -------------------- | ------------------------------------------------------- |
+| OpenAI API failure   | Log error, skip frame, show warning                     |
+| API rate limit       | Reduce analysis frequency, show rate limit notification |
+| Network interruption | Show network error, provide retry button                |
 
-### 7.3 音频错误
+### 7.3 Audio Errors
 
-| 错误 | 处理方式 |
-|------|---------|
-| 麦克风不可用 | 显示警告，禁用对话检测，继续解说 |
-| TTS失败 | 使用备用引擎（gTTS → pyttsx3） |
-| 音频播放失败 | 记录错误，显示字幕但不播放 |
+| Error                  | Handling Method                                              |
+| ---------------------- | ------------------------------------------------------------ |
+| Microphone unavailable | Show warning, disable dialogue detection, continue narration |
+| TTS failure            | Use backup engine (gTTS → pyttsx3)                           |
+| Audio playback failure | Log error, show subtitles but do not play audio              |
 
 ---
 
-## 8. 测试计划
+## 8. Test Plan
 
-### 8.1 单元测试
+### 8.1 Unit Tests
 
-**文件**: `tests/test_camera_controller.py`
+**File**: `tests/test_camera_controller.py`
 
 ```python
 def test_controller_initialization():
@@ -996,9 +1021,10 @@ def test_callbacks():
     assert len(frames_received) > 0
 ```
 
-### 8.2 集成测试
+### 8.2 Integration Tests
 
-**测试场景**:
+**Test Scenarios**:
+
 ```python
 def test_end_to_end_narration():
     """Test complete pipeline from camera to narration"""
@@ -1024,9 +1050,10 @@ def test_end_to_end_narration():
         print(f"Narration: {narration}")
 ```
 
-### 8.3 性能测试
+### 8.3 Performance Tests
 
-**测试指标**:
+**Test Metrics**:
+
 ```python
 def test_latency():
     """Measure end-to-end latency"""
@@ -1053,11 +1080,12 @@ def test_latency():
 
 ---
 
-## 9. 部署与发布
+## 9. Deployment and Release
 
-### 9.1 依赖安装
+### 9.1 Dependency Installation
 
-**requirements.txt更新**:
+**requirements.txt Update**:
+
 ```
 # Existing dependencies
 opencv-python>=4.5.0
@@ -1070,26 +1098,29 @@ sounddevice>=0.4.6
 Pillow>=10.0.0
 ```
 
-**安装命令**:
+**Installation Command**:
+
 ```bash
 pip install -r requirements.txt
 ```
 
-### 9.2 配置向导
+### 9.2 Configuration Wizard
 
-**首次运行**:
+**First Run**:
+
 ```bash
 python -m src.main camera
 
-# 如果没有配置API key，显示设置向导
-# 1. 检测.env文件
-# 2. 如果不存在，提示用户输入API key
-# 3. 保存到.env文件
+# If the API key is not configured, show the setup wizard
+# 1. Detect .env file
+# 2. If it does not exist, prompt the user to enter the API key
+# 3. Save to .env file
 ```
 
-### 9.3 打包分发
+### 9.3 Packaging and Distribution
 
-**使用PyInstaller打包**:
+**Packaging with PyInstaller**:
+
 ```bash
 pyinstaller --onefile --windowed \
   --name LuminaLink \
@@ -1099,27 +1130,30 @@ pyinstaller --onefile --windowed \
 
 ---
 
-## 10. 维护与扩展
+## 10. Maintenance and Extension
 
-### 10.1 日志记录
+### 10.1 Logging
 
-**日志级别**:
-- `DEBUG`: 详细的调试信息（帧处理、队列状态）
-- `INFO`: 关键事件（启动、停止、解说生成）
-- `WARNING`: 非关键错误（队列满、帧跳过）
-- `ERROR`: 严重错误（API失败、设备错误）
+**Log Levels**:
 
-**日志文件**:
+- `DEBUG`: Detailed debugging information (frame processing, queue status)
+- `INFO`: Critical events (start, stop, narration generation)
+- `WARNING`: Non-critical errors (queue full, frame skip)
+- `ERROR`: Severe errors (API failure, device error)
+
+**Log Files**:
+
 ```
 ~/.luminalink/logs/
-├── luminalink.log (主日志)
-├── camera.log (摄像头日志)
-└── api.log (API调用日志)
+├── luminalink.log (Main log)
+├── camera.log (Camera log)
+└── api.log (API call log)
 ```
 
-### 10.2 性能监控
+### 10.2 Performance Monitoring
 
-**性能指标收集**:
+**Performance Metrics Collection**:
+
 ```python
 class PerformanceMonitor:
     def __init__(self):
@@ -1140,11 +1174,12 @@ class PerformanceMonitor:
 
 ---
 
-## 11. 附录
+## 11. Appendix
 
-### 11.1 完整文件清单
+### 11.1 Complete File List
 
-**需创建**:
+**To be created**:
+
 1. `src/luminalink/__init__.py`
 2. `src/luminalink/types.py`
 3. `src/luminalink/input/__init__.py`
@@ -1156,18 +1191,20 @@ class PerformanceMonitor:
 9. `tests/test_camera_controller.py`
 10. `tests/test_gui.py`
 
-**需修改**:
-1. `src/main.py` - 添加camera子命令
-2. `src/video_processor.py` - 导入统一VideoFrame
-3. `requirements.txt` - 添加sounddevice和Pillow
+**To be modified**:
 
-**需复用**:
-1. `src/luminalink/input/camera_input.py` - 已实现
-2. `src/realtime_player.py` - 参考多线程架构
-3. `src/audio_detector.py` - RealtimeAudioDetector
-4. 所有其他核心模块（scene_analyzer, narrator, tts_engine等）
+1. `src/main.py` - Add `camera` subcommand
+2. `src/video_processor.py` - Import unified `VideoFrame`
+3. `requirements.txt` - Add `sounddevice` and `Pillow`
 
-### 11.2 依赖关系图
+**To be reused**:
+
+1. `src/luminalink/input/camera_input.py` - Already implemented
+2. `src/realtime_player.py` - Reference multi-threaded architecture
+3. `src/audio_detector.py` - `RealtimeAudioDetector`
+4. All other core modules (`scene_analyzer`, `narrator`, `tts_engine`, etc.)
+
+### 11.2 Dependency Graph
 
 ```
 camera_app.py
@@ -1184,9 +1221,10 @@ camera_app.py
 
 ---
 
-**文档维护**:
-- **创建者**: Claude (LuminaLink Planning Agent)
-- **最后更新**: 2026-02-06
-- **审阅状态**: 待审阅
-- **版本历史**:
-  - v1.0 (2026-02-06): 初始版本
+**Document Maintenance**:
+
+- **Creator**: Claude (LuminaLink Planning Agent)
+- **Last Updated**: 2026-02-06
+- **Review Status**: Pending Review
+- **Version History**:
+  - v1.0 (2026-02-06): Initial Version
