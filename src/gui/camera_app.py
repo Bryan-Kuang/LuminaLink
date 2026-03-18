@@ -29,7 +29,9 @@ class CameraApp:
     def __init__(
         self,
         camera_index: int = 0,
-        characters_config: Optional[str] = None
+        characters_config: Optional[str] = None,
+        mic_device_index: int = 0,
+        cooldown: float = 5.0,
     ):
         """
         Initialize camera application.
@@ -37,6 +39,8 @@ class CameraApp:
         Args:
             camera_index: Camera device index
             characters_config: Path to character configuration JSON
+            mic_device_index: Microphone device index
+            cooldown: Minimum seconds between narrations
         """
         self.camera_index = camera_index
         self.characters_config = characters_config
@@ -44,7 +48,9 @@ class CameraApp:
         # Controller
         self.controller = CameraRealtimeController(
             camera_index=camera_index,
-            characters_config=characters_config
+            characters_config=characters_config,
+            mic_device_index=mic_device_index,
+            cooldown=cooldown,
         )
 
         # Tkinter setup

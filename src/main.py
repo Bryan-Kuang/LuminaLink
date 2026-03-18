@@ -408,12 +408,39 @@ def process(
     type=int,
     help="Camera frame rate (default: 30)"
 )
+@click.option(
+    "--mic", "-m",
+    default=0,
+    type=int,
+    help="Microphone device index (default: 0). Use --list-mics to see available devices."
+)
+@click.option(
+    "--silence-threshold",
+    default=-35.0,
+    type=float,
+    help="Silence threshold in dB (default: -35). Lower values = more sensitive."
+)
+@click.option(
+    "--cooldown",
+    default=5.0,
+    type=float,
+    help="Minimum seconds between narrations (default: 5)."
+)
+@click.option(
+    "--list-mics",
+    is_flag=True,
+    help="List available microphone devices and exit."
+)
 def camera(
     camera: int,
     characters: Optional[str],
     width: int,
     height: int,
-    fps: int
+    fps: int,
+    mic: int,
+    silence_threshold: float,
+    cooldown: float,
+    list_mics: bool
 ):
     """
     Real-time camera narration mode with GUI
@@ -422,6 +449,21 @@ def camera(
     real-time narration of the captured video. Automatically pauses
     narration during dialogue.
     """
+    if list_mics:
+        from .audio_input import AudioInputStream
+        devices = AudioInputStream.list_devices()
+        if not devices:
+            console.print("[yellow]No microphone devices found[/yellow]")
+        else:
+            table = Table(title="Available Microphones", show_header=True)
+            table.add_column("ID", style="cyan")
+            table.add_column("Name", style="green")
+            table.add_column("Channels")
+            for dev in devices:
+                table.add_row(str(dev["id"]), dev["name"], str(dev["channels"]))
+            console.print(table)
+        return
+
     console.print(Panel.fit(
         "[bold blue]LuminaLink Camera Mode[/bold blue]\n"
         "Starting GUI...",
@@ -433,11 +475,13 @@ def camera(
 
         app = CameraApp(
             camera_index=camera,
-            characters_config=characters
+            characters_config=characters,
+            mic_device_index=mic,
+            cooldown=cooldown,
         )
 
         console.print("[green]✓ GUI initialized[/green]")
-        console.print(f"[cyan]Camera: {camera} | Resolution: {width}x{height} @ {fps}fps[/cyan]")
+        console.print(f"[cyan]Camera: {camera} | Mic: {mic} | Resolution: {width}x{height} @ {fps}fps[/cyan]")
         console.print("[dim]Use Space to pause/resume, Esc to stop[/dim]\n")
 
         app.run()
