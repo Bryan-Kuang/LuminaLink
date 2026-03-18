@@ -25,7 +25,7 @@ class AIConfig:
     
     # OpenAI
     openai_api_key: str = ""
-    openai_model: str = "gpt-4-vision-preview"
+    openai_model: str = "gpt-4o"
     openai_base_url: Optional[str] = None
     
     # Google Gemini
@@ -54,7 +54,7 @@ class AIConfig:
 class TTSConfig:
     """Text-to-Speech Configuration"""
     engine: Literal["edge", "gtts", "pyttsx3"] = "edge"
-    voice: str = "zh-CN-XiaoxiaoNeural"
+    voice: str = "en-US-AriaNeural"
     speed: float = 1.0
     
     def __post_init__(self):
@@ -119,6 +119,7 @@ class VideoConfig:
 @dataclass
 class PathConfig:
     """Path Configuration"""
+    project_root: Path = field(default_factory=lambda: PROJECT_ROOT)
     cache_dir: Path = field(default_factory=lambda: PROJECT_ROOT / "data" / "cache")
     characters_dir: Path = field(default_factory=lambda: PROJECT_ROOT / "data" / "characters")
     models_dir: Path = field(default_factory=lambda: PROJECT_ROOT / "data" / "models")
