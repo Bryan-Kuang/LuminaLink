@@ -26,7 +26,7 @@ class AudioInputStream:
     in real-time and feeds it to a RealtimeAudioDetector for silence detection.
     """
 
-    def __init__(self, detector, sample_rate: int = 22050, blocksize: int = 512):
+    def __init__(self, detector, sample_rate: int = 22050, blocksize: int = 512, device_id: Optional[int] = None):
         """
         Initialize audio input stream.
 
@@ -34,6 +34,7 @@ class AudioInputStream:
             detector: RealtimeAudioDetector instance to feed audio to
             sample_rate: Audio sample rate in Hz (default: 22050)
             blocksize: Audio block size in frames (default: 512, ~23ms at 22050Hz)
+            device_id: Audio input device ID (None for system default)
         """
         if not SOUNDDEVICE_AVAILABLE:
             raise ImportError(
@@ -44,6 +45,7 @@ class AudioInputStream:
         self.detector = detector
         self.sample_rate = sample_rate
         self.blocksize = blocksize
+        self.device_id = device_id
         self.stream: Optional[sd.InputStream] = None
         self._running = False
 
@@ -80,6 +82,7 @@ class AudioInputStream:
 
         try:
             self.stream = sd.InputStream(
+                device=self.device_id,
                 samplerate=self.sample_rate,
                 channels=1,  # Mono audio
                 callback=self._audio_callback,
