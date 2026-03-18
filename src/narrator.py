@@ -61,7 +61,7 @@ class Narrator:
     ):
         config = get_config()
         self._style = style
-        self._cooldown = cooldown if cooldown is not None else config.narration.interval
+        self._cooldown = max(1.0, cooldown if cooldown is not None else config.narration.interval)
         self._max_length = config.narration.max_length
         self._history: List[Narration] = []
         self._last_narration_time: float = -999.0
@@ -83,19 +83,28 @@ class Narrator:
         text = scene_analysis.description.strip()
         timestamp = slot[0]
 
+        if len(slot) < 2 or slot[1] < slot[0]:
+            logger.warning("Invalid slot passed to generate_narration, skipping")
+            return None
+
         if not text:
+            return None
+
+        # Skip sentinel/error strings from the AI fallback
+        if text.startswith("[") and text.endswith("]"):
+            logger.debug("Skipping fallback/error description from scene analyzer")
             return None
 
         if self._is_refusal_response(text):
             logger.warning(f"Refusal response detected, skipping: {text[:60]}")
             return None
 
+        if len(text) > self._max_length:
+            text = self._truncate(text, self._max_length)
+
         if self._is_duplicate(text):
             logger.debug("Duplicate narration skipped")
             return None
-
-        if len(text) > self._max_length:
-            text = self._truncate(text, self._max_length)
 
         narration = Narration(
             text=text,
