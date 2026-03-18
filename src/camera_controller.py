@@ -52,7 +52,9 @@ class CameraRealtimeController:
         characters_config: Optional[str] = None,
         camera_width: int = 1280,
         camera_height: int = 720,
-        camera_fps: int = 30
+        camera_fps: int = 30,
+        mic_device_index: Optional[int] = None,
+        cooldown: float = 5.0,
     ):
         """
         Initialize camera realtime controller.
@@ -80,14 +82,15 @@ class CameraRealtimeController:
         try:
             self.audio_stream = AudioInputStream(
                 detector=self.audio_detector,
-                sample_rate=22050
+                sample_rate=22050,
+                device_id=mic_device_index
             )
         except (ImportError, Exception) as e:
             logger.warning(f"Audio input unavailable: {e}")
             logger.warning("Continuing without dialogue detection")
             self.audio_stream = None
         self.scene_analyzer = SceneAnalyzer()
-        self.narrator = Narrator()
+        self.narrator = Narrator(cooldown=cooldown)
         self.tts_manager = TTSManager()
         self.audio_player = AudioPlayer()
 
@@ -313,8 +316,8 @@ class CameraRealtimeController:
                         continue
 
                     # Check if silence (no dialogue)
-                    if not self.audio_detector.is_current_silence():
-                        logger.debug(f"Skipping narration: dialogue detected")
+                    if not self.audio_detector.is_silence_long_enough(min_duration=1.5):
+                        logger.debug("Skipping narration: insufficient silence (need 1.5s)")
                         continue
 
                     # Back off if API keeps failing
@@ -384,48 +387,66 @@ class CameraRealtimeController:
 
     def _narration_worker(self):
         """TTS generation and playback worker thread"""
-        while not self._stop_event.is_set():
-            try:
-                narration = self._narration_queue.get(timeout=1.0)
-            except Empty:
-                continue
-
-            # Wait if paused
-            self._pause_event.wait()
-
-            try:
-                # Notify GUI
-                if self._on_narration_callback:
-                    try:
-                        self._on_narration_callback(narration.text)
-                    except Exception as e:
-                        logger.error(f"Narration callback error: {e}")
-
-                # Update state
-                self.state.current_narration = narration.text
-
-                # Generate TTS audio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            while not self._stop_event.is_set():
                 try:
-                    audio_file = self.tts_manager.synthesize(narration.text)
-                    logger.debug(f"TTS audio generated: {audio_file}")
-                except Exception as e:
-                    logger.error(f"TTS synthesis error: {e}")
+                    narration = self._narration_queue.get(timeout=1.0)
+                except Empty:
                     continue
 
-                # Play audio (blocking)
+                # Wait if paused
+                self._pause_event.wait()
+
                 try:
-                    self.audio_player.play(audio_file)
-                    self._narration_count += 1
+                    # Notify GUI
+                    if self._on_narration_callback:
+                        try:
+                            self._on_narration_callback(narration.text)
+                        except Exception as e:
+                            logger.error(f"Narration callback error: {e}")
+
+                    self.state.current_narration = narration.text
+
+                    # Synthesize TTS audio
+                    try:
+                        result = loop.run_until_complete(
+                            self.tts_manager.synthesize(narration.text)
+                        )
+                    except Exception as e:
+                        logger.error(f"TTS synthesis error: {e}")
+                        continue
+
+                    if not result.success:
+                        logger.error(f"TTS synthesis failed: {result.error}")
+                        continue
+
+                    # Play audio — blocks until playback completes
+                    try:
+                        loop.run_until_complete(
+                            self.audio_player.play(result.audio_path, block=True)
+                        )
+                        self._narration_count += 1
+                    except Exception as e:
+                        logger.error(f"Audio playback error: {e}")
+
+                    # Clean up temp file
+                    try:
+                        import os as _os
+                        if _os.path.exists(result.audio_path):
+                            _os.remove(result.audio_path)
+                    except Exception:
+                        pass
+
+                    self.state.current_narration = None
+
                 except Exception as e:
-                    logger.error(f"Audio playback error: {e}")
-
-                # Clear current narration
-                self.state.current_narration = None
-
-            except Exception as e:
-                logger.error(f"Narration worker error: {e}")
-
-        logger.info("Narration worker stopped")
+                    logger.error(f"Narration worker error: {e}")
+        finally:
+            loop.run_until_complete(loop.shutdown_asyncgens())
+            loop.close()
+            logger.info("Narration worker stopped")
 
     def _notify_status(self, status: str):
         """Notify status change via callback"""
