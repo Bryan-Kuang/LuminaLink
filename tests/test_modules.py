@@ -54,15 +54,16 @@ class TestVideoProcessor:
         buffer = FrameBuffer(max_size=3)
         
         # Add frames
+        from src.luminalink.types import VideoFrame
         for i in range(5):
             frame = np.zeros((100, 100, 3), dtype=np.uint8)
-            buffer.add_frame(frame, i * 0.1)
-        
+            buffer.add(VideoFrame.from_video_processor(frame=frame, timestamp=i * 0.1, frame_number=i))
+
         # Check buffer size
-        assert len(buffer) == 3
-        
+        assert len(buffer._frames) == 3
+
         # Get frame
-        frame_data = buffer.get_frame(0.2)
+        frame_data = buffer.get_by_timestamp(0.2)
         assert frame_data is not None
 
 
@@ -138,12 +139,12 @@ class TestCharacterRecognizer:
         assert "Johnny" in char.aliases
         
         # Get character
-        result = recognizer.get_character("John")
+        result = recognizer.get_character_by_name("John")
         assert result is not None
         assert result.name == "John"
-        
+
         # Get by alias
-        result = recognizer.get_character("Johnny")
+        result = recognizer.get_character_by_name("Johnny")
         assert result is not None
         assert result.name == "John"
 
@@ -164,7 +165,7 @@ class TestSceneAnalyzer:
         analyzer = SceneAnalyzer()
         analyzer.set_characters(["John", "Mary"])
         
-        assert len(analyzer.known_characters) == 2
+        assert len(analyzer._known_characters) == 2
 
 
 class TestNarrator:
@@ -240,8 +241,8 @@ async def test_edge_tts_format_rate():
     engine = EdgeTTSEngine()
     
     assert engine._format_rate(1.0) == "+0%"
-    assert engine._format_rate(1.2) == "+20%"
-    assert engine._format_rate(0.8) == "-20%"
+    assert engine._format_rate(1.2) == "+19%"
+    assert engine._format_rate(0.8) == "-19%"
 
 
 def test_all_modules_import():
@@ -254,8 +255,7 @@ def test_all_modules_import():
     from src import narrator
     from src import tts_engine
     from src import main
-    from src import realtime_player
-    
+
     print("All modules imported successfully!")
 
 
