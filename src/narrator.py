@@ -6,6 +6,7 @@ Generates, filters, and tracks real-time narration from scene analysis results.
 
 import logging
 import re
+import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -64,11 +65,26 @@ class Narrator:
         self._cooldown = max(1.0, cooldown if cooldown is not None else config.narration.interval)
         self._max_length = config.narration.max_length
         self._history: List[Narration] = []
-        self._last_narration_time: float = -999.0
+        # Use wall clock (time.time()) so mark_played() can reset it correctly.
+        # Start far in the past so the first narration fires immediately.
+        self._last_narration_time: float = time.time() - 9999.0
 
-    def should_narrate(self, timestamp: float) -> bool:
-        """Return True if enough time has elapsed since the last narration."""
-        return (timestamp - self._last_narration_time) >= self._cooldown
+    def should_narrate(self) -> bool:
+        """Return True if enough time has elapsed since the last narration ended."""
+        elapsed = time.time() - self._last_narration_time
+        return elapsed >= self._cooldown
+
+    def mark_played(self) -> None:
+        """
+        Reset the cooldown clock from RIGHT NOW.
+
+        Call this AFTER audio playback finishes so the cooldown gap is measured
+        from the END of the last spoken narration — not from when it was queued.
+        This prevents back-to-back narrations when TTS + playback takes longer
+        than the cooldown interval.
+        """
+        self._last_narration_time = time.time()
+        logger.debug(f"Cooldown reset after playback (next in ≥{self._cooldown:.0f}s)")
 
     def generate_narration(
         self,
@@ -114,7 +130,9 @@ class Narrator:
         )
 
         self._history.append(narration)
-        self._last_narration_time = timestamp
+        # Set to now so the cooldown gate blocks analysis during TTS+playback.
+        # mark_played() will reset this again once audio finishes.
+        self._last_narration_time = time.time()
         return narration
 
     def get_history(self) -> List[Narration]:
@@ -140,20 +158,57 @@ class Narrator:
     def _is_refusal_response(self, text: str) -> bool:
         return bool(_REFUSAL_PATTERNS.search(text))
 
-    def _is_duplicate(self, text: str, threshold: float = 0.6) -> bool:
-        """Jaccard word-overlap check against the last 3 narrations."""
+    # Common English stopwords — excluded from Jaccard so "he walks to the
+    # door" and "the man moves toward the door" don't appear 100% different.
+    _STOPWORDS = frozenset({
+        "a", "an", "the", "and", "or", "but", "in", "on", "at", "to",
+        "for", "of", "with", "by", "from", "is", "are", "was", "were",
+        "he", "she", "they", "it", "his", "her", "their", "its", "him",
+        "as", "into", "onto", "up", "down", "out", "over", "through",
+        "while", "toward", "towards", "across", "around", "this", "that",
+    })
+
+    def _is_duplicate(self, text: str) -> bool:
+        """
+        Smart duplicate check:
+        - Strips stopwords before Jaccard so paraphrases are caught
+        - Checks the last 5 narrations (wider window than before)
+        - Uses time-decay: stricter threshold within the last 60 s
+        """
         if not self._history:
             return False
-        words = set(text.lower().split())
+
+        words = {w for w in text.lower().split() if w not in self._STOPWORDS}
         if not words:
             return False
-        for recent in self._history[-3:]:
-            recent_words = set(recent.text.lower().split())
+
+        now = time.time()
+        for recent in self._history[-5:]:
+            recent_words = {
+                w for w in recent.text.lower().split()
+                if w not in self._STOPWORDS
+            }
             if not recent_words:
                 continue
+
             union = words | recent_words
-            if union and len(words & recent_words) / len(union) >= threshold:
+            overlap = len(words & recent_words) / len(union)
+
+            # How many seconds ago was this narration?
+            age = now - recent.timestamp          # recent.timestamp is wall-clock
+            # Tighter threshold for recent narrations, looser for older ones:
+            #   age   0 s → threshold 0.35
+            #   age  60 s → threshold 0.55
+            #   age 120 s → threshold 0.70 (effectively off)
+            threshold = min(0.35 + age / 200.0, 0.70)
+
+            if overlap >= threshold:
+                logger.debug(
+                    f"Duplicate skipped (overlap={overlap:.2f} >= "
+                    f"threshold={threshold:.2f}, age={age:.0f}s)"
+                )
                 return True
+
         return False
 
     def _truncate(self, text: str, max_len: int) -> str:

@@ -337,7 +337,12 @@ class RealtimeAudioDetector:
         self._buffer = np.zeros(buffer_size, dtype=np.float32)
         self._buffer_pos = 0
         self._is_silence = True
-        self._silence_start: Optional[float] = None  # monotonic time when silence began
+        # BUG FIX: initialise to now — the zero-filled buffer IS silence,
+        # so silence has been ongoing since the detector was created.
+        # Without this, the transition-based logic in _update_silence_state
+        # never fires on startup and _silence_start stays None forever,
+        # causing is_silence_long_enough() to always return False.
+        self._silence_start: Optional[float] = time.monotonic()
 
     def feed_audio(self, audio_chunk: np.ndarray):
         """
@@ -378,8 +383,8 @@ class RealtimeAudioDetector:
         self._is_silence = volume_db < self.silence_threshold_db
 
         now = time.monotonic()
-        if self._is_silence and not was_silent:
-            # Silence just started
+        if self._is_silence and (not was_silent or self._silence_start is None):
+            # Silence just started (or was never tracked — safety net)
             self._silence_start = now
         elif not self._is_silence:
             # Sound detected — reset silence tracking

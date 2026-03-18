@@ -32,6 +32,7 @@ class CameraApp:
         characters_config: Optional[str] = None,
         mic_device_index: int = 0,
         cooldown: float = 5.0,
+        silence_threshold: float = -35.0,
     ):
         """
         Initialize camera application.
@@ -41,6 +42,7 @@ class CameraApp:
             characters_config: Path to character configuration JSON
             mic_device_index: Microphone device index
             cooldown: Minimum seconds between narrations
+            silence_threshold: Silence threshold in dB (default -35)
         """
         self.camera_index = camera_index
         self.characters_config = characters_config
@@ -51,6 +53,7 @@ class CameraApp:
             characters_config=characters_config,
             mic_device_index=mic_device_index,
             cooldown=cooldown,
+            silence_threshold=silence_threshold,
         )
 
         # Tkinter setup

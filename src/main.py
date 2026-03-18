@@ -24,12 +24,28 @@ from .scene_analyzer import SceneAnalyzer
 from .narrator import Narrator, NarrationStyle
 from .tts_engine import TTSManager, NarrationPlayer
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+# ---------------------------------------------------------------------------
+# Logging — writes to console AND a rolling debug file (luminalink_debug.log)
+# ---------------------------------------------------------------------------
+LOG_FILE = Path(__file__).parent.parent / "luminalink_debug.log"
+
+_fmt = logging.Formatter("%(asctime)s [%(levelname)-8s] %(name)s — %(message)s")
+
+_file_handler = logging.FileHandler(LOG_FILE, mode="w", encoding="utf-8")
+_file_handler.setLevel(logging.DEBUG)
+_file_handler.setFormatter(_fmt)
+
+_console_handler = logging.StreamHandler(sys.stdout)
+_console_handler.setLevel(logging.DEBUG)
+_console_handler.setFormatter(_fmt)
+
+_root_logger = logging.getLogger()
+_root_logger.setLevel(logging.DEBUG)
+_root_logger.addHandler(_file_handler)
+_root_logger.addHandler(_console_handler)
+
 logger = logging.getLogger(__name__)
+logger.info(f"Diagnostic log → {LOG_FILE}")
 
 console = Console()
 
@@ -422,9 +438,9 @@ def process(
 )
 @click.option(
     "--cooldown",
-    default=5.0,
+    default=8.0,
     type=float,
-    help="Minimum seconds between narrations (default: 5)."
+    help="Minimum seconds between narrations (default: 8)."
 )
 @click.option(
     "--list-mics",
@@ -478,6 +494,7 @@ def camera(
             characters_config=characters,
             mic_device_index=mic,
             cooldown=cooldown,
+            silence_threshold=silence_threshold,
         )
 
         console.print("[green]✓ GUI initialized[/green]")

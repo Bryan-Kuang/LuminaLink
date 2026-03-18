@@ -19,7 +19,7 @@ from .luminalink.input import CameraInput
 from .audio_detector import RealtimeAudioDetector
 from .audio_input import AudioInputStream
 from .character_recognizer import CharacterRecognizer
-from .scene_analyzer import SceneAnalyzer
+from .scene_analyzer import SceneAnalyzer, SceneChangeDetector
 from .narrator import Narrator
 from .tts_engine import TTSManager, AudioPlayer
 
@@ -55,6 +55,7 @@ class CameraRealtimeController:
         camera_fps: int = 30,
         mic_device_index: Optional[int] = None,
         cooldown: float = 5.0,
+        silence_threshold: float = -35.0,
     ):
         """
         Initialize camera realtime controller.
@@ -77,7 +78,7 @@ class CameraRealtimeController:
             fps=camera_fps
         )
         self.audio_detector = RealtimeAudioDetector(
-            silence_threshold_db=self.config.narration.silence_threshold
+            silence_threshold_db=silence_threshold
         )
         try:
             self.audio_stream = AudioInputStream(
@@ -87,7 +88,10 @@ class CameraRealtimeController:
             )
         except (ImportError, Exception) as e:
             logger.warning(f"Audio input unavailable: {e}")
-            logger.warning("Continuing without dialogue detection")
+            logger.warning(
+                "BUG FIX: No microphone — narration will fire on cooldown "
+                "timer only (silence check bypassed)"
+            )
             self.audio_stream = None
         self.scene_analyzer = SceneAnalyzer()
         self.narrator = Narrator(cooldown=cooldown)
@@ -123,9 +127,29 @@ class CameraRealtimeController:
         # Threads
         self._threads = []
 
+        # Scene change detector — skips GPT-4o call when the frame looks
+        # nearly identical to the last one that was analysed.
+        self._scene_change_detector = SceneChangeDetector(threshold=0.25)
+
         # Statistics
         self._frame_count = 0
         self._narration_count = 0
+
+        # ── Startup diagnostic banner ────────────────────────────────────────
+        logger.info("=" * 60)
+        logger.info("CameraRealtimeController — startup diagnostics")
+        logger.info(f"  Camera index      : {camera_index}")
+        logger.info(f"  Mic device        : {mic_device_index} "
+                    f"({'active' if self.audio_stream else 'UNAVAILABLE — silence check bypassed'})")
+        logger.info(f"  Silence threshold : {silence_threshold} dB")
+        logger.info(f"  Narration cooldown: {cooldown}s")
+        logger.info(f"  AI provider       : {self.config.ai.provider}")
+        logger.info(f"  OpenAI model      : {self.config.ai.openai_model}")
+        api_key = self.config.ai.openai_api_key
+        logger.info(f"  API key present   : {'YES (' + api_key[:8] + '...)' if api_key else 'NO — *** MISSING ***'}")
+        logger.info(f"  TTS engine        : {self.config.tts.engine}")
+        logger.info(f"  TTS voice         : {self.config.tts.voice}")
+        logger.info("=" * 60)
 
     def set_on_frame_callback(self, callback: Callable[[np.ndarray], None]):
         """Set frame callback (called when new frame is captured)"""
@@ -296,6 +320,7 @@ class CameraRealtimeController:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         consecutive_failures = 0
+        _last_heartbeat = 0.0
 
         try:
             while not self._stop_event.is_set():
@@ -308,16 +333,53 @@ class CameraRealtimeController:
                 self._pause_event.wait()
 
                 try:
+                    import time as _time
                     timestamp = video_frame.timestamp
 
-                    # Check if should narrate (minimum interval)
-                    if not self.narrator.should_narrate(timestamp):
-                        logger.debug(f"Skipping narration: too soon (interval)")
+                    # ── Periodic heartbeat (every 5 s) ───────────────────────
+                    now_wall = _time.monotonic()
+                    if now_wall - _last_heartbeat >= 5.0:
+                        vol_db   = self.audio_detector.get_current_volume_db()
+                        sil_dur  = self.audio_detector.get_silence_duration()
+                        mic_info = (
+                            f"vol={vol_db:.1f}dB silence={sil_dur:.1f}s"
+                            if self.audio_stream
+                            else "mic=NONE (silence bypassed)"
+                        )
+                        logger.info(
+                            f"[HEARTBEAT] frames={self._frame_count} "
+                            f"narrations={self._narration_count} "
+                            f"api_failures={consecutive_failures} | "
+                            f"{mic_info}"
+                        )
+                        _last_heartbeat = now_wall
+
+                    # Check if should narrate (cooldown since last playback END)
+                    if not self.narrator.should_narrate():
+                        logger.debug("Skipping: cooldown not elapsed")
                         continue
 
-                    # Check if silence (no dialogue)
-                    if not self.audio_detector.is_silence_long_enough(min_duration=1.5):
-                        logger.debug("Skipping narration: insufficient silence (need 1.5s)")
+                    # Scene change detection — skip GPT-4o if the frame looks
+                    # nearly identical to the last analysed frame.
+                    if not self._scene_change_detector.detect_change(video_frame.image_bgr):
+                        logger.debug("Skipping: scene unchanged since last analysis")
+                        continue
+
+                    # Check if silence (no dialogue).
+                    # If there is no mic stream, bypass the check — cooldown
+                    # timer alone governs the narration rate.
+                    silence_ok = (
+                        self.audio_stream is None
+                        or self.audio_detector.is_silence_long_enough(min_duration=1.5)
+                    )
+                    if not silence_ok:
+                        sil_dur = self.audio_detector.get_silence_duration()
+                        vol_db  = self.audio_detector.get_current_volume_db()
+                        logger.debug(
+                            f"Skipping: silence only {sil_dur:.2f}s / 1.5s needed "
+                            f"(volume {vol_db:.1f} dB, threshold "
+                            f"{self.audio_detector.silence_threshold_db:.1f} dB)"
+                        )
                         continue
 
                     # Back off if API keeps failing
@@ -373,8 +435,29 @@ class CameraRealtimeController:
                         )
 
                         if narration:
-                            self._narration_queue.put(narration)
-                            logger.info(f"Narration generated: {narration.text[:50]}...")
+                            # Drain any stale queued narrations — we only ever
+                            # want to play the LATEST analysis, never a backlog.
+                            drained = 0
+                            while not self._narration_queue.empty():
+                                try:
+                                    self._narration_queue.get_nowait()
+                                    drained += 1
+                                except Empty:
+                                    break
+                            if drained:
+                                logger.debug(
+                                    f"Dropped {drained} stale narration(s) "
+                                    f"— keeping latest only"
+                                )
+                            try:
+                                self._narration_queue.put_nowait(narration)
+                                logger.info(
+                                    f"✅ Narration queued [{self._narration_count + 1}]: "
+                                    f"{narration.text[:80]}"
+                                    f"{'...' if len(narration.text) > 80 else ''}"
+                                )
+                            except Exception:
+                                logger.warning("Narration queue full, skipping")
                     except Exception as e:
                         logger.error(f"Narration generation error: {e}")
 
@@ -422,12 +505,47 @@ class CameraRealtimeController:
                         logger.error(f"TTS synthesis failed: {result.error}")
                         continue
 
-                    # Play audio — blocks until playback completes
+                    # Play audio — interruptible: stops the moment dialogue
+                    # resumes so narration never talks over characters.
                     try:
-                        loop.run_until_complete(
-                            self.audio_player.play(result.audio_path, block=True)
-                        )
+                        import subprocess as _sp
+                        import os as _os2
+
+                        _path = result.audio_path
+                        if _os2.name == "posix" and _os2.uname().sysname == "Darwin":
+                            _cmd = ["afplay", _path]
+                        elif _os2.name == "posix":
+                            _cmd = ["aplay", _path]
+                        else:
+                            _cmd = ["powershell", "-c",
+                                    f'(New-Object Media.SoundPlayer "{_path}").PlaySync()']
+
+                        proc = _sp.Popen(_cmd)
+                        _sound_onset: Optional[float] = None
+
+                        while proc.poll() is None:          # while audio is playing
+                            loop.run_until_complete(asyncio.sleep(0.1))
+
+                            # Only check mic if we have a live audio stream
+                            if self.audio_stream and not self.audio_detector.is_current_silence():
+                                if _sound_onset is None:
+                                    _sound_onset = time.monotonic()
+                                elif time.monotonic() - _sound_onset >= 0.3:
+                                    # 300 ms of continuous sound → cut narration
+                                    proc.terminate()
+                                    logger.info(
+                                        "🛑 Narration cut — dialogue detected "
+                                        f"({time.monotonic() - _sound_onset:.2f}s of sound)"
+                                    )
+                                    break
+                            else:
+                                _sound_onset = None   # momentary noise, reset
+
+                        proc.wait()   # reap zombie process
                         self._narration_count += 1
+                        # Reset cooldown from NOW so the gap is measured from
+                        # the END of playback, not from when it was queued.
+                        self.narrator.mark_played()
                     except Exception as e:
                         logger.error(f"Audio playback error: {e}")
 
