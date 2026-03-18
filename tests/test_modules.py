@@ -83,11 +83,35 @@ class TestAudioDetector:
         segment = AudioSegment(
             start_time=0.0,
             end_time=1.0,
-            is_speech=True,
-            volume=0.5
+            has_speech=True,
+            volume_db=0.5
         )
         
         assert segment.duration == 1.0
+
+    def test_silence_duration_tracking(self):
+        """Test that silence duration is tracked."""
+        from src.audio_detector import RealtimeAudioDetector
+        import numpy as np
+
+        detector = RealtimeAudioDetector(silence_threshold_db=-20.0)
+
+        # Feed silent audio
+        silent_chunk = np.zeros(512, dtype=np.float32)
+        detector.feed_audio(silent_chunk)
+
+        assert detector.is_current_silence()
+        assert detector.get_silence_duration() >= 0.0
+
+        # Feed loud audio — use a chunk large enough to fill the entire buffer
+        sample_rate = detector.sample_rate
+        buffer_size = int(sample_rate * detector.buffer_duration)
+        loud_chunk = np.ones(buffer_size, dtype=np.float32) * 0.5
+        detector.feed_audio(loud_chunk)
+
+        assert not detector.is_current_silence()
+        assert detector.get_silence_duration() == 0.0
+        assert not detector.is_silence_long_enough(min_duration=1.5)
 
 
 class TestCharacterRecognizer:

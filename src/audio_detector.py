@@ -5,6 +5,7 @@ Detects dialogue and silence segments in video to determine when to insert narra
 """
 
 import numpy as np
+import time
 from pathlib import Path
 from typing import List, Tuple, Optional
 from dataclasses import dataclass
@@ -336,7 +337,8 @@ class RealtimeAudioDetector:
         self._buffer = np.zeros(buffer_size, dtype=np.float32)
         self._buffer_pos = 0
         self._is_silence = True
-    
+        self._silence_start: Optional[float] = None  # monotonic time when silence began
+
     def feed_audio(self, audio_chunk: np.ndarray):
         """
         Feed audio data to buffer
@@ -368,17 +370,35 @@ class RealtimeAudioDetector:
         self._update_silence_state()
     
     def _update_silence_state(self):
-        """Update silence state"""
-        # Calculate current volume
+        """Update silence state and track duration."""
         rms = np.sqrt(np.mean(self._buffer ** 2))
         volume_db = 20 * np.log10(rms) if rms > 0 else -100
-        
+
+        was_silent = self._is_silence
         self._is_silence = volume_db < self.silence_threshold_db
+
+        now = time.monotonic()
+        if self._is_silence and not was_silent:
+            # Silence just started
+            self._silence_start = now
+        elif not self._is_silence:
+            # Sound detected — reset silence tracking
+            self._silence_start = None
     
     def is_current_silence(self) -> bool:
         """Check if current audio is silence"""
         return self._is_silence
-    
+
+    def get_silence_duration(self) -> float:
+        """Return seconds of continuous silence elapsed. 0.0 if not currently silent."""
+        if not self._is_silence or self._silence_start is None:
+            return 0.0
+        return time.monotonic() - self._silence_start
+
+    def is_silence_long_enough(self, min_duration: float = 1.5) -> bool:
+        """Return True if silence has been ongoing for at least min_duration seconds."""
+        return self.get_silence_duration() >= min_duration
+
     def get_current_volume_db(self) -> float:
         """Get current volume (dB)"""
         rms = np.sqrt(np.mean(self._buffer ** 2))
@@ -389,3 +409,4 @@ class RealtimeAudioDetector:
         self._buffer.fill(0)
         self._buffer_pos = 0
         self._is_silence = True
+        self._silence_start = None
